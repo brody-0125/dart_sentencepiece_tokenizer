@@ -1,0 +1,32 @@
+# Development files
+.idea/
+.vscode/
+.dart_tool/
+
+# Test and benchmark
+test/
+benchmark/
+coverage/
+
+# Documentation sources
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Debug files
+debug_*.dart
+
+# Model files (large binary files)
+*.model
+!test/fixtures/*.model
+
+# OS specific
+.DS_Store
+Thumbs.db

@@ -1,0 +1,34 @@
+# Dart/Flutter specific
+.dart_tool/
+.packages
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Coverage
+coverage/
+
+# Generated files
+*.g.dart
+*.freezed.dart
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+.test_coverage/
+
+# Benchmark artifacts
+*.model
+!test/fixtures/*.model
+
+# Debug files
+debug_*.dart
+
+# Claude Code
+.claude/
+CLAUDE.md
