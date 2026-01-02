@@ -1,0 +1,355 @@
+# dart_sentencepiece_tokenizer
+
+![Dart](https://img.shields.io/badge/Dart-3.0+-0175C2.svg?logo=dart)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Compatible-FF6600)
+
+A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE (Gemma) and Unigram (Llama) algorithms.
+
+## Features
+
+- **Pure Dart** - Zero dependencies, works everywhere (Flutter, Server, CLI, Web)
+- **Memory Efficient** - Typed arrays (`Int32List`, `Uint8List`) for 50-70% memory reduction
+- **BPE & Unigram** - Supports both algorithms used by Gemma and Llama models
+- **Full API** - Encoding, decoding, padding, truncation, offset mapping
+- **Batch Processing** - Sequential and parallel (Isolate-based) batch encoding
+- **Well Tested** - 158 tests with 100% pass rate
+
+## Installation
+
+```yaml
+dependencies:
+  dart_sentencepiece_tokenizer: ^1.0.0
+```
+
+## Quick Start
+
+```dart
+import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
+
+void main() {
+  // Load tokenizer with Llama config (BOS only)
+  final tokenizer = SentencePieceTokenizer.fromModelFileSync(
+    'tokenizer.model',
+    config: SentencePieceConfig.llama,
+  );
+
+  // Encode text
+  final encoding = tokenizer.encode('Hello, world!');
+  print(encoding.tokens); // [<s>, ▁Hello, ,, ▁world, !]
+  print(encoding.ids);    // [1, 15043, 29892, 3186, 29991]
+
+  // Decode back to text
+  final text = tokenizer.decode(encoding.ids, skipSpecialTokens: true);
+  print(text); // Hello, world!
+}
+```
+
+## Usage
+
+### Single Text Encoding
+
+```dart
+final encoding = tokenizer.encode('Hello world');
+
+print(encoding.tokens);           // Token strings
+print(encoding.ids);              // Token IDs (Int32List)
+print(encoding.attentionMask);    // Attention mask (Uint8List)
+print(encoding.typeIds);          // Type IDs (Uint8List)
+print(encoding.offsets);          // Character offsets [(start, end), ...]
+print(encoding.wordIds);          // Word indices
+print(encoding.sequenceIds);      // Sequence indices (0, 1, or null)
+
+// Without special tokens
+final raw = tokenizer.encode('Hello', addSpecialTokens: false);
+```
+
+### Sentence Pair Encoding
+
+```dart
+// For QA, NLI, sentence similarity tasks
+final encoding = tokenizer.encodePair(
+  'What is machine learning?',
+  'Machine learning is a subset of AI.',
+);
+
+print(encoding.typeIds);     // [0,0,0,0,0,0, 1,1,1,1,1,1,1]
+print(encoding.sequenceIds); // [null,0,0,0,0,null, 1,1,1,1,1,1,null]
+
+// With truncation
+final encoding = tokenizer.encodePair(
+  longQuestion,
+  longAnswer,
+  maxLength: 512,
+  strategy: TruncationStrategy.longestFirst,
+);
+```
+
+### Batch Encoding
+
+```dart
+// Sequential batch
+final encodings = tokenizer.encodeBatch(['Hello', 'World', 'Test']);
+
+// Parallel batch (uses Isolates for batches >= 8)
+final encodings = await tokenizer.encodeBatchParallel(texts);
+
+// Pair batch
+final pairs = [('Q1', 'A1'), ('Q2', 'A2')];
+final encodings = tokenizer.encodePairBatch(pairs, maxLength: 256);
+```
+
+### Padding
+
+```dart
+// Fluent API
+final tokenizer = SentencePieceTokenizer.fromModelFileSync('model.model')
+  ..enablePadding(length: 512, direction: SpPaddingDirection.right);
+
+// Or pad to longest in batch
+tokenizer.enablePadding(); // Auto-pads to longest
+
+// Manual padding
+final padded = encoding.withPadding(
+  targetLength: 128,
+  padTokenId: tokenizer.vocab.padId,
+  padOnRight: true,
+);
+
+// Pad to multiple of N
+final padded = encoding.withPaddingToMultipleOf(
+  multiple: 8,
+  padTokenId: tokenizer.vocab.padId,
+);
+```
+
+### Truncation
+
+```dart
+// Fluent API
+final tokenizer = SentencePieceTokenizer.fromModelFileSync('model.model')
+  ..enableTruncation(maxLength: 512, direction: SpTruncationDirection.right);
+
+// Manual truncation
+final truncated = encoding.withTruncation(maxLength: 64);
+
+// Truncation strategies for pairs
+final (truncA, truncB) = Encoding.truncatePair(
+  encodingA: encodingA,
+  encodingB: encodingB,
+  maxLength: 128,
+  strategy: TruncationStrategy.longestFirst,
+);
+```
+
+**Truncation Strategies:**
+- `longestFirst` - Remove from longest sequence iteratively
+- `onlyFirst` - Truncate first sequence only
+- `onlySecond` - Truncate second sequence only
+- `doNotTruncate` - No truncation
+
+### Offset Mapping
+
+```dart
+final encoding = tokenizer.encode('Hello world');
+
+// Character position -> Token index
+final tokenIdx = encoding.charToToken(6); // 'w' -> token index
+
+// Token index -> Character span
+final (start, end) = encoding.tokenToChars(1)!; // token -> (0, 5)
+
+// Word index -> Token span
+final (startToken, endToken) = encoding.wordToTokens(0)!;
+
+// Token -> Word index
+final wordIdx = encoding.tokenToWord(1);
+
+// Token -> Sequence index (0, 1, or null for special tokens)
+final seqIdx = encoding.tokenToSequence(1);
+```
+
+### Vocabulary Access
+
+```dart
+print(tokenizer.vocabSize);     // 32000
+print(tokenizer.vocab.unkId);   // 0
+print(tokenizer.vocab.bosId);   // 1
+print(tokenizer.vocab.eosId);   // 2
+print(tokenizer.vocab.padId);   // -1 (if not defined)
+
+// Token <-> ID conversion
+tokenizer.convertTokensToIds(['▁hello', '▁world']); // [15043, 3186]
+tokenizer.convertIdsToTokens([15043, 3186]);         // ['▁hello', '▁world']
+
+// Check if token exists
+tokenizer.vocab.contains('▁hello'); // true
+
+// Get vocabulary map
+final vocabMap = tokenizer.vocab.vocabularyMap; // Map<String, int>
+```
+
+### Decoding
+
+```dart
+// Decode with special tokens
+final text = tokenizer.decode(encoding.ids, skipSpecialTokens: false);
+
+// Decode without special tokens (default: true)
+final text = tokenizer.decode(encoding.ids);
+
+// Batch decode
+final texts = tokenizer.decodeBatch(idsBatch);
+```
+
+## ONNX Runtime Integration
+
+Use with ONNX Runtime for on-device ML inference:
+
+```dart
+import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
+import 'dart:typed_data';
+
+final tokenizer = SentencePieceTokenizer.fromModelFileSync('model.model',
+    config: SentencePieceConfig.llama)
+  ..enableTruncation(maxLength: 512);
+
+final encoding = tokenizer.encode('What is machine learning?');
+
+// Encoding.ids is already Int32List, convert to Int64List for ONNX
+final inputIds = Int64List.fromList(encoding.ids);
+final attentionMask = Int64List.fromList(encoding.attentionMask);
+
+// Pass to ONNX session
+// final outputs = await session.run({
+//   'input_ids': inputIds,
+//   'attention_mask': attentionMask,
+// });
+```
+
+## Configuration
+
+```dart
+// Gemma: adds BOS and EOS tokens
+final gemmaTokenizer = SentencePieceTokenizer.fromModelFileSync(
+  'gemma.model',
+  config: SentencePieceConfig.gemma,
+);
+
+// Llama: adds BOS token only
+final llamaTokenizer = SentencePieceTokenizer.fromModelFileSync(
+  'llama.model',
+  config: SentencePieceConfig.llama,
+);
+
+// Custom configuration
+final customTokenizer = SentencePieceTokenizer.fromModelFileSync(
+  'model.model',
+  config: const SentencePieceConfig(
+    addBosToken: true,
+    addEosToken: false,
+  ),
+);
+```
+
+| Config | BOS Token | EOS Token | Use Case |
+|--------|-----------|-----------|----------|
+| `SentencePieceConfig()` | No | No | Raw tokenization |
+| `SentencePieceConfig.gemma` | Yes | Yes | Gemma models |
+| `SentencePieceConfig.llama` | Yes | No | Llama models |
+
+## API Reference
+
+### SentencePieceTokenizer
+
+| Method | Description |
+|--------|-------------|
+| `fromModelFile(path, config?)` | Load from .model file (async) |
+| `fromModelFileSync(path, config?)` | Load from .model file (sync) |
+| `fromBytes(bytes, config?)` | Load from byte data |
+| `encode(text, addSpecialTokens?)` | Encode single text |
+| `encodePair(textA, textB, ...)` | Encode text pair |
+| `encodeBatch(texts, addSpecialTokens?)` | Encode multiple texts |
+| `encodeBatchParallel(texts, ...)` | Parallel batch encoding |
+| `encodePairBatch(pairs, ...)` | Batch encode text pairs |
+| `decode(ids, skipSpecialTokens?)` | Decode IDs to text |
+| `decodeBatch(idsBatch, ...)` | Batch decode |
+| `enablePadding()` / `noPadding()` | Configure padding |
+| `enableTruncation()` / `noTruncation()` | Configure truncation |
+| `convertTokensToIds(tokens)` | Convert tokens to IDs |
+| `convertIdsToTokens(ids)` | Convert IDs to tokens |
+| `numSpecialTokensToAdd(isPair?)` | Get special token count |
+
+### Encoding
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `tokens` | `List<String>` | Token strings |
+| `ids` | `Int32List` | Token IDs |
+| `attentionMask` | `Uint8List` | Attention mask (1=attend, 0=ignore) |
+| `typeIds` | `Uint8List` | Token type IDs (0=first, 1=second) |
+| `specialTokensMask` | `Uint8List` | Special token mask |
+| `offsets` | `List<(int, int)>` | Character offsets |
+| `wordIds` | `List<int?>` | Word indices |
+| `sequenceIds` | `List<int?>` | Sequence indices |
+| `length` | `int` | Number of tokens |
+
+## Performance
+
+| Metric | Value |
+|--------|-------|
+| Throughput | ~500K+ tokens/sec |
+| Model loading | ~50ms (32K vocab) |
+| Memory (vocab) | ~3MB |
+| Lookup complexity | O(k) per token |
+
+### Memory Efficiency
+
+Uses typed arrays for 50-70% memory reduction:
+
+| Field | Type | Bytes/token |
+|-------|------|-------------|
+| `ids` | `Int32List` | 4 |
+| `typeIds` | `Uint8List` | 1 |
+| `attentionMask` | `Uint8List` | 1 |
+| `specialTokensMask` | `Uint8List` | 1 |
+
+## Model File
+
+Download SentencePiece models from HuggingFace:
+
+- [Llama 2](https://huggingface.co/meta-llama/Llama-2-7b-hf/resolve/main/tokenizer.model)
+- [Gemma](https://huggingface.co/google/gemma-7b/resolve/main/tokenizer.model)
+
+Format: Binary protobuf (.model files from SentencePiece C++ library).
+
+## Testing
+
+```bash
+# Run all tests (158 tests)
+dart test
+
+# Run specific test file
+dart test test/sentencepiece_test.dart
+
+# Run benchmarks
+dart run benchmark/performance_benchmark.dart
+
+# Run HuggingFace compatibility benchmark
+dart run benchmark/hf_compatibility_benchmark.dart
+```
+
+### HuggingFace Compatibility Verification
+
+```bash
+# Run HuggingFace compatibility benchmark
+dart run benchmark/hf_compatibility_benchmark.dart
+
+# Regenerate benchmark expected values (requires Python + sentencepiece)
+pip install sentencepiece
+python scripts/generate_hf_benchmark_data.py --model tokenizer.model
+```
+
+## License
+
+MIT License

@@ -1,0 +1,69 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2024-01-03
+
+### Added
+
+- Initial release of dart_sentencepiece_tokenizer
+- Pure Dart implementation with zero external dependencies
+- Support for BPE (Byte Pair Encoding) algorithm used by Gemma models
+- Support for Unigram algorithm used by Llama models
+- Viterbi algorithm implementation for optimal Unigram segmentation
+- Byte fallback support for handling unknown characters
+- Unicode-aware Trie for efficient vocabulary lookup
+- Memory-efficient typed arrays (Int32List, Uint8List) for encodings
+
+### Features
+
+- `SentencePieceTokenizer` - Main tokenizer class
+  - `fromBytes()` - Load from protobuf bytes
+  - `fromModelFile()` / `fromModelFileSync()` - Load from .model file
+  - `encode()` - Encode single text
+  - `encodeBatch()` - Encode multiple texts
+  - `encodeBatchParallel()` - Parallel batch encoding using Isolates
+  - `encodePair()` - Encode text pairs for sequence classification
+  - `encodePairBatch()` - Batch encode text pairs
+  - `decode()` / `decodeBatch()` - Decode token IDs back to text
+
+- `Encoding` class with:
+  - `ids` - Token IDs (Int32List)
+  - `tokens` - Token strings
+  - `typeIds` - Segment type IDs (Uint8List)
+  - `attentionMask` - Attention mask (Uint8List)
+  - `specialTokensMask` - Special token indicators (Uint8List)
+  - `offsets` - Character offsets for each token
+  - `withPadding()` / `withTruncation()` - Post-processing methods
+  - `truncatePair()` - Static method for pair truncation
+
+- Predefined configurations:
+  - `SentencePieceConfig.llama` - Llama-style (BOS only)
+  - `SentencePieceConfig.gemma` - Gemma-style (BOS + EOS)
+
+- Truncation strategies:
+  - `longestFirst` - Truncate longer sequence first
+  - `onlyFirst` - Only truncate first sequence
+  - `onlySecond` - Only truncate second sequence
+  - `doNotTruncate` - No truncation
+
+- Padding options:
+  - Left/right padding direction
+  - Fixed length or pad to longest
+  - Pad to multiple of N
+
+### Performance
+
+- Efficient Trie-based vocabulary lookup
+- Memory-optimized typed arrays reduce memory usage by ~78%
+- Parallel batch processing with configurable chunk size
+- Lazy evaluation where possible
+
+### Compatibility
+
+- Dart SDK 3.0.0+
+- Compatible with Llama, Gemma, and other SentencePiece models
+- HuggingFace-compatible API design
