@@ -5,7 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2024-01-03
+## [1.1.0] - 2025-01-04
+
+### Changed
+
+- **BPE Algorithm Optimization**: Replaced list-based merge operations with doubly-linked list structure for O(1) merge operations
+- **Merge Cache**: Added caching for pair lookups to avoid redundant string concatenation and vocabulary checks
+
+### Added
+
+- **Input Size Validation**: Added maximum input length limit (500,000 characters) to prevent OOM errors
+  - `encode()` and `encodePair()` now throw `ArgumentError` for oversized inputs
+  - Validation applies to all encoding methods including batch operations
+
+### Removed
+
+- Removed unused `TokenResult` class from `tokenization_algorithm.dart`
+
+### Performance
+
+- BPE tokenization now uses O(1) node merging instead of O(n) list reconstruction
+- Merge pair lookups are cached, reducing redundant vocabulary checks
+
+---
+
+## [1.0.0] - 2025-01-04
 
 ### Added
 
@@ -64,6 +88,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Compatibility
 
-- Dart SDK 3.0.0+
+- Dart SDK 3.10.7+
 - Compatible with Llama, Gemma, and other SentencePiece models
 - HuggingFace-compatible API design
