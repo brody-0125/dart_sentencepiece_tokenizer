@@ -1,6 +1,6 @@
 # dart_sentencepiece_tokenizer
 
-![Dart](https://img.shields.io/badge/Dart-3.0+-0175C2.svg?logo=dart)
+![Dart](https://img.shields.io/badge/Dart-3.10+-0175C2.svg?logo=dart)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Compatible-FF6600)
 
@@ -11,15 +11,17 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **Pure Dart** - Zero dependencies, works everywhere (Flutter, Server, CLI, Web)
 - **Memory Efficient** - Typed arrays (`Int32List`, `Uint8List`) for 50-70% memory reduction
 - **BPE & Unigram** - Supports both algorithms used by Gemma and Llama models
+- **Optimized BPE** - O(1) merge operations with linked list and merge caching
 - **Full API** - Encoding, decoding, padding, truncation, offset mapping
 - **Batch Processing** - Sequential and parallel (Isolate-based) batch encoding
+- **Input Validation** - Protects against OOM with configurable size limits
 - **Well Tested** - 158 tests with 100% pass rate
 
 ## Installation
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.0.0
+  dart_sentencepiece_tokenizer: ^1.1.0
 ```
 
 ## Quick Start
@@ -63,6 +65,8 @@ print(encoding.sequenceIds);      // Sequence indices (0, 1, or null)
 // Without special tokens
 final raw = tokenizer.encode('Hello', addSpecialTokens: false);
 ```
+
+> **Note:** Input text exceeding 500,000 characters throws `ArgumentError` to prevent OOM.
 
 ### Sentence Pair Encoding
 
@@ -302,6 +306,8 @@ final customTokenizer = SentencePieceTokenizer.fromModelFileSync(
 | Model loading | ~50ms (32K vocab) |
 | Memory (vocab) | ~3MB |
 | Lookup complexity | O(k) per token |
+| BPE merge | O(1) per merge |
+| Max input length | 500,000 chars |
 
 ### Memory Efficiency
 
