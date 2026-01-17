@@ -6,19 +6,25 @@ import '../model/model_proto.dart';
 class SpVocabulary {
   final Map<String, int> _pieceToId;
   final List<String> _idToPiece;
-  final Float32List _scores;
-  final Uint8List _types;
+  Float32List _scores;
+  Uint8List _types;
   final Trie _trie;
   final Int16List? _byteToId;
 
   final int unkId;
-  final int bosId;
-  final int eosId;
-  final int padId;
+  int bosId;
+  int eosId;
+  int padId;
   final String unkPiece;
-  final String bosPiece;
-  final String eosPiece;
-  final String padPiece;
+  String bosPiece;
+  String eosPiece;
+  String padPiece;
+
+  /// Tracks IDs of tokens added after initial vocab creation.
+  final Set<int> _addedTokenIds = {};
+
+  /// Tracks IDs of special tokens added dynamically.
+  final Set<int> _addedSpecialTokenIds = {};
 
   SpVocabulary._({
     required Map<String, int> pieceToId,
@@ -48,7 +54,8 @@ class SpVocabulary {
     final size = pieces.length;
 
     final pieceToId = <String, int>{};
-    final idToPiece = List<String>.filled(size, '');
+    // Use growable list to allow dynamic token addition
+    final idToPiece = List<String>.generate(size, (_) => '', growable: true);
     final scores = Float32List(size);
     final types = Uint8List(size);
     final trie = Trie();
@@ -179,6 +186,85 @@ class SpVocabulary {
     if (piece.length != 6) return null;
     if (!piece.startsWith('<0x') || !piece.endsWith('>')) return null;
     return int.tryParse(piece.substring(3, 5), radix: 16);
+  }
+
+  /// Add new tokens to the vocabulary.
+  ///
+  /// Returns the number of tokens actually added (excluding duplicates).
+  int addTokens(List<String> tokens, {double score = 0.0}) {
+    var added = 0;
+    for (final token in tokens) {
+      if (_pieceToId.containsKey(token)) continue;
+
+      final id = _idToPiece.length;
+      _pieceToId[token] = id;
+      _idToPiece.add(token);
+
+      // Expand typed arrays
+      _scores = _expandFloat32List(_scores, score);
+      _types = _expandUint8List(_types, PieceType.userDefined.value);
+
+      _trie.insert(token, id);
+      _addedTokenIds.add(id);
+      added++;
+    }
+    return added;
+  }
+
+  /// Add a special token to the vocabulary.
+  ///
+  /// If the token already exists, it will be marked as special.
+  /// Returns the ID of the token.
+  int addSpecialToken(String token, {double score = 0.0}) {
+    int id;
+    if (_pieceToId.containsKey(token)) {
+      id = _pieceToId[token]!;
+    } else {
+      id = _idToPiece.length;
+      _pieceToId[token] = id;
+      _idToPiece.add(token);
+      _scores = _expandFloat32List(_scores, score);
+      _types = _expandUint8List(_types, PieceType.control.value);
+      _trie.insert(token, id);
+      _addedTokenIds.add(id);
+    }
+    _addedSpecialTokenIds.add(id);
+    return id;
+  }
+
+  /// Get all dynamically added tokens.
+  Map<String, int> getAddedVocab() {
+    final result = <String, int>{};
+    for (final id in _addedTokenIds) {
+      result[_idToPiece[id]] = id;
+    }
+    return result;
+  }
+
+  /// Check if a token was added dynamically.
+  bool isAddedToken(String token) {
+    final id = _pieceToId[token];
+    return id != null && _addedTokenIds.contains(id);
+  }
+
+  /// Check if an ID corresponds to a dynamically added token.
+  bool isAddedTokenId(int id) => _addedTokenIds.contains(id);
+
+  /// Check if an ID corresponds to a dynamically added special token.
+  bool isAddedSpecialTokenId(int id) => _addedSpecialTokenIds.contains(id);
+
+  Float32List _expandFloat32List(Float32List original, double newValue) {
+    final expanded = Float32List(original.length + 1);
+    expanded.setRange(0, original.length, original);
+    expanded[original.length] = newValue;
+    return expanded;
+  }
+
+  Uint8List _expandUint8List(Uint8List original, int newValue) {
+    final expanded = Uint8List(original.length + 1);
+    expanded.setRange(0, original.length, original);
+    expanded[original.length] = newValue;
+    return expanded;
   }
 
   @override

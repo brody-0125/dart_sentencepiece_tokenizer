@@ -15,6 +15,7 @@ export '../encoding.dart' show Encoding, TruncationStrategy;
 export 'model/model_proto.dart' show ModelType;
 
 const _kMinBatchSizeForParallel = 8;
+const _kMaxInputLength = 500000;
 
 /// Padding direction for batch encoding.
 enum SpPaddingDirection { right, left }
@@ -79,6 +80,9 @@ class SentencePieceTokenizer {
   final TokenizationAlgorithm _algorithm;
   final ModelType modelType;
 
+  /// Access normalizer for serialization.
+  SpNormalizer get normalizer => _normalizer;
+
   SpPaddingConfig? _paddingConfig;
   SpTruncationConfig? _truncationConfig;
 
@@ -134,6 +138,17 @@ class SentencePieceTokenizer {
       algorithm: algorithm,
       modelType: model.trainerSpec.modelType,
     );
+  }
+
+  /// Create tokenizer from a SentencePieceModel.
+  ///
+  /// This is useful for creating tokenizers from JSON deserialization
+  /// or other non-file sources.
+  static SentencePieceTokenizer fromModel(
+    SentencePieceModel model, {
+    SentencePieceConfig config = const SentencePieceConfig(),
+  }) {
+    return _createFromModel(model, config);
   }
 
   static TokenizationAlgorithm _createAlgorithm(
@@ -647,6 +662,114 @@ class SentencePieceTokenizer {
 
   /// Get vocabulary size.
   int get vocabSize => vocab.size;
+
+  /// Add new tokens to the vocabulary.
+  ///
+  /// Returns the number of tokens actually added (excluding duplicates).
+  /// New tokens can be used in tokenization and will be recognized.
+  ///
+  /// ```dart
+  /// final added = tokenizer.addTokens(['<custom>', '<domain>']);
+  /// print('Added $added tokens');
+  /// ```
+  int addTokens(List<String> tokens) {
+    return vocab.addTokens(tokens);
+  }
+
+  /// Add special tokens to the vocabulary.
+  ///
+  /// Special tokens are tokens that should be treated specially during
+  /// encoding/decoding (e.g., skip in decode with skipSpecialTokens).
+  ///
+  /// Supported keys: 'pad_token', 'mask_token', 'sep_token', 'cls_token',
+  /// or any custom key.
+  ///
+  /// ```dart
+  /// tokenizer.addSpecialTokens({
+  ///   'pad_token': '<pad>',
+  ///   'mask_token': '<mask>',
+  /// });
+  /// ```
+  int addSpecialTokens(Map<String, String> specialTokens) {
+    var added = 0;
+    for (final entry in specialTokens.entries) {
+      final key = entry.key;
+      final token = entry.value;
+
+      final existingId = vocab.contains(token) ? vocab.pieceToId(token) : null;
+      final id = vocab.addSpecialToken(token);
+
+      // Update special token references
+      switch (key) {
+        case 'pad_token':
+          vocab.padId = id;
+          vocab.padPiece = token;
+          break;
+        case 'bos_token':
+          vocab.bosId = id;
+          vocab.bosPiece = token;
+          break;
+        case 'eos_token':
+          vocab.eosId = id;
+          vocab.eosPiece = token;
+          break;
+      }
+
+      if (existingId == null) added++;
+    }
+    return added;
+  }
+
+  /// Get all dynamically added tokens.
+  Map<String, int> getAddedVocab() => vocab.getAddedVocab();
+
+  /// Check if a token was added dynamically.
+  bool isAddedToken(String token) => vocab.isAddedToken(token);
+
+  /// Get the full vocabulary as a map from token to ID.
+  ///
+  /// If [withAddedTokens] is false, only returns the original vocabulary.
+  Map<String, int> getVocab({bool withAddedTokens = true}) {
+    if (withAddedTokens) {
+      return vocab.vocabularyMap;
+    }
+    // Filter out added tokens
+    final result = <String, int>{};
+    for (final entry in vocab.vocabularyMap.entries) {
+      if (!vocab.isAddedToken(entry.key)) {
+        result[entry.key] = entry.value;
+      }
+    }
+    return result;
+  }
+
+  /// Tokenize text into token strings without creating full Encoding.
+  ///
+  /// This is a lightweight alternative to [encode] when you only need
+  /// the token strings.
+  ///
+  /// ```dart
+  /// final tokens = tokenizer.tokenize('Hello world');
+  /// // → ['▁Hello', '▁world']
+  /// ```
+  List<String> tokenize(String text) {
+    if (text.isEmpty) return [];
+    if (text.length > _kMaxInputLength) {
+      throw ArgumentError(
+        'Input text too long: ${text.length} characters exceeds maximum of $_kMaxInputLength',
+      );
+    }
+
+    final normalized = _normalizer.normalize(text);
+    final tokenIds = _algorithm.tokenize(normalized);
+
+    return [for (final id in tokenIds) vocab.idToPiece(id)];
+  }
+
+  /// Tokenize multiple texts.
+  List<List<String>> tokenizeBatch(List<String> texts) {
+    return [for (final text in texts) tokenize(text)];
+  }
 
   @override
   String toString() =>

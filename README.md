@@ -13,13 +13,14 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **BPE & Unigram** - Supports both algorithms used by Gemma and Llama models
 - **Full API** - Encoding, decoding, padding, truncation, offset mapping
 - **Batch Processing** - Sequential and parallel (Isolate-based) batch encoding
-- **Well Tested** - 158 tests with 100% pass rate
+- **HuggingFace Compatible** - JSON serialization, dynamic token addition, tokenize() API
+- **Well Tested** - 223 tests with 100% pass rate
 
 ## Installation
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.0.0
+  dart_sentencepiece_tokenizer: ^1.2.0
 ```
 
 ## Quick Start
@@ -185,8 +186,56 @@ tokenizer.convertIdsToTokens([15043, 3186]);         // ['▁hello', '▁world']
 // Check if token exists
 tokenizer.vocab.contains('▁hello'); // true
 
-// Get vocabulary map
-final vocabMap = tokenizer.vocab.vocabularyMap; // Map<String, int>
+// Get vocabulary map (HuggingFace compatible)
+final vocabMap = tokenizer.getVocab(); // Map<String, int>
+final vocabWithAdded = tokenizer.getVocab(withAddedTokens: true);
+```
+
+### HuggingFace-Compatible Tokenize
+
+```dart
+// Returns List<String> instead of Encoding (HuggingFace compatible)
+final tokens = tokenizer.tokenize('Hello world');
+print(tokens); // ['▁Hello', '▁world']
+
+// Batch tokenization
+final tokensBatch = tokenizer.tokenizeBatch(['Hello', 'World']);
+```
+
+### Dynamic Token Addition
+
+```dart
+// Add new tokens to vocabulary
+final added = tokenizer.addTokens(['[CUSTOM1]', '[CUSTOM2]']);
+print('Added $added tokens');
+
+// Add special tokens
+tokenizer.addSpecialTokens({
+  'pad_token': '[PAD]',
+  'mask_token': '[MASK]',
+  'cls_token': '[CLS]',
+  'sep_token': '[SEP]',
+});
+
+// Check added tokens
+print(tokenizer.getAddedVocab()); // {'[CUSTOM1]': 32000, ...}
+print(tokenizer.isAddedToken('[CUSTOM1]')); // true
+```
+
+### JSON Serialization
+
+```dart
+// Save to HuggingFace tokenizer.json format
+await tokenizer.saveToJson('tokenizer.json');
+tokenizer.saveToJsonSync('tokenizer.json');
+
+// Or get JSON string
+final jsonString = tokenizer.toJson();
+
+// Load from JSON
+final loaded = await TokenizerJsonLoader.fromJsonFile('tokenizer.json');
+final loadedSync = TokenizerJsonLoader.fromJsonFileSync('tokenizer.json');
+final fromString = TokenizerJsonLoader.fromJsonString(jsonString);
 ```
 
 ### Decoding
@@ -279,6 +328,24 @@ final customTokenizer = SentencePieceTokenizer.fromModelFileSync(
 | `convertTokensToIds(tokens)` | Convert tokens to IDs |
 | `convertIdsToTokens(ids)` | Convert IDs to tokens |
 | `numSpecialTokensToAdd(isPair?)` | Get special token count |
+| `tokenize(text)` | Get token strings (HuggingFace compatible) |
+| `tokenizeBatch(texts)` | Batch tokenization |
+| `getVocab(withAddedTokens?)` | Get vocabulary as Map |
+| `addTokens(tokens)` | Add tokens to vocabulary |
+| `addSpecialTokens(tokens)` | Add special tokens |
+| `getAddedVocab()` | Get dynamically added tokens |
+| `isAddedToken(token)` | Check if token was added |
+| `toJson()` | Serialize to JSON string |
+| `saveToJson(path)` | Save to JSON file (async) |
+| `saveToJsonSync(path)` | Save to JSON file (sync) |
+
+### TokenizerJsonLoader
+
+| Method | Description |
+|--------|-------------|
+| `fromJsonString(json)` | Load from JSON string |
+| `fromJsonFile(path)` | Load from JSON file (async) |
+| `fromJsonFileSync(path)` | Load from JSON file (sync) |
 
 ### Encoding
 
@@ -326,7 +393,7 @@ Format: Binary protobuf (.model files from SentencePiece C++ library).
 ## Testing
 
 ```bash
-# Run all tests (158 tests)
+# Run all tests (223 tests)
 dart test
 
 # Run specific test file

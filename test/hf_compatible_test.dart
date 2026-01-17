@@ -1,7 +1,8 @@
 /// Test cases for HuggingFace SentencePiece tokenizer compatibility.
-///
-/// These tests ensure compatibility with HuggingFace tokenizers behavior
-/// for SentencePiece BPE and Unigram algorithms.
+library;
+
+import 'dart:io';
+
 import 'package:test/test.dart';
 import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
 
@@ -619,6 +620,312 @@ void main() {
 
       expect(truncA.length, equals(encodingA.length));
       expect(truncB.length, equals(encodingB.length));
+    });
+  });
+
+  // ============================================================
+  // Phase 1 (v0.3.0) HuggingFace Compatibility Tests
+  // ============================================================
+
+  group('HF Compatible: JSON Serialization (tokenizer.json)', () {
+    late SentencePieceTokenizer tokenizer;
+
+    setUpAll(() {
+      tokenizer = createTestTokenizer();
+    });
+
+    test('toJson produces HuggingFace-compatible structure', () {
+      final json = tokenizer.toJson();
+
+      // Should contain all required fields for HuggingFace compatibility
+      expect(json, contains('"version"'));
+      expect(json, contains('"model_type"'));
+      expect(json, contains('"vocab"'));
+      expect(json, contains('"special_tokens"'));
+      expect(json, contains('"normalizer"'));
+      expect(json, contains('"config"'));
+    });
+
+    test('fromJsonString restores tokenizer correctly', () {
+      final json = tokenizer.toJson();
+      final restored = TokenizerJsonLoader.fromJsonString(json);
+
+      // Should have same vocab size
+      expect(restored.vocabSize, equals(tokenizer.vocabSize));
+
+      // Should produce same encoding
+      const text = 'hello world';
+      final original = tokenizer.encode(text, addSpecialTokens: false);
+      final restoredEncoding = restored.encode(text, addSpecialTokens: false);
+
+      expect(restoredEncoding.ids.toList(), equals(original.ids.toList()));
+    });
+
+    test('JSON round-trip preserves special token IDs', () {
+      final json = tokenizer.toJson();
+      final restored = TokenizerJsonLoader.fromJsonString(json);
+
+      expect(restored.vocab.unkId, equals(tokenizer.vocab.unkId));
+      expect(restored.vocab.bosId, equals(tokenizer.vocab.bosId));
+      expect(restored.vocab.eosId, equals(tokenizer.vocab.eosId));
+    });
+
+    test('config can be overridden during load', () {
+      final json = tokenizer.toJson();
+      final restored = TokenizerJsonLoader.fromJsonString(
+        json,
+        config: SentencePieceConfig.gemma,
+      );
+
+      expect(restored.config.addBosToken, isTrue);
+      expect(restored.config.addEosToken, isTrue);
+    });
+
+    test('async file save and load works', () async {
+      final tempFile = File(
+        '${Directory.systemTemp.path}/hf_compat_test_tokenizer.json',
+      );
+      try {
+        await tokenizer.saveToJson(tempFile.path);
+        expect(tempFile.existsSync(), isTrue);
+
+        final restored = await TokenizerJsonLoader.fromJsonFile(tempFile.path);
+        expect(restored.vocabSize, equals(tokenizer.vocabSize));
+      } finally {
+        if (tempFile.existsSync()) {
+          tempFile.deleteSync();
+        }
+      }
+    });
+  });
+
+  group('HF Compatible: Dynamic Token Addition (add_tokens)', () {
+    late SentencePieceTokenizer tokenizer;
+
+    setUp(() {
+      tokenizer = createTestTokenizer();
+    });
+
+    test('addTokens adds new tokens like HuggingFace', () {
+      final originalSize = tokenizer.vocabSize;
+      final added = tokenizer.addTokens(['<custom_token>', '<another_token>']);
+
+      expect(added, equals(2));
+      expect(tokenizer.vocabSize, equals(originalSize + 2));
+    });
+
+    test('addTokens skips existing tokens', () {
+      // '▁hello' exists in test vocab
+      final originalSize = tokenizer.vocabSize;
+      final added = tokenizer.addTokens(['▁hello', '<new_token>']);
+
+      expect(added, equals(1)); // Only <new_token> added
+      expect(tokenizer.vocabSize, equals(originalSize + 1));
+    });
+
+    test('added tokens are used during encoding', () {
+      tokenizer.addTokens(['<|special|>']);
+
+      final encoding = tokenizer.encode(
+        'hello <|special|> world',
+        addSpecialTokens: false,
+      );
+
+      expect(encoding.tokens, contains('<|special|>'));
+    });
+
+    test('addSpecialTokens adds special tokens', () {
+      final originalSize = tokenizer.vocabSize;
+      final added = tokenizer.addSpecialTokens({'mask_token': '<mask>'});
+
+      expect(added, equals(1));
+      expect(tokenizer.vocabSize, equals(originalSize + 1));
+
+      // Should be marked as special
+      final maskId = tokenizer.vocab.pieceToId('<mask>');
+      expect(tokenizer.vocab.isSpecialToken(maskId), isTrue);
+    });
+
+    test('addSpecialTokens updates pad_token reference', () {
+      tokenizer.addSpecialTokens({'pad_token': '<|pad|>'});
+
+      expect(tokenizer.vocab.padId, greaterThanOrEqualTo(0));
+      expect(tokenizer.vocab.padPiece, equals('<|pad|>'));
+    });
+
+    test('getAddedVocab returns only added tokens', () {
+      tokenizer.addTokens(['<added1>', '<added2>']);
+      tokenizer.addSpecialTokens({'mask_token': '<mask>'});
+
+      final addedVocab = tokenizer.getAddedVocab();
+
+      expect(addedVocab.length, equals(3));
+      expect(addedVocab.containsKey('<added1>'), isTrue);
+      expect(addedVocab.containsKey('<added2>'), isTrue);
+      expect(addedVocab.containsKey('<mask>'), isTrue);
+    });
+
+    test('isAddedToken correctly identifies added tokens', () {
+      tokenizer.addTokens(['<my_token>']);
+
+      expect(tokenizer.isAddedToken('<my_token>'), isTrue);
+      expect(tokenizer.isAddedToken('▁hello'), isFalse); // Existing token
+    });
+
+    test('added tokens are preserved in JSON round-trip', () {
+      tokenizer.addTokens(['<custom>']);
+      tokenizer.addSpecialTokens({'mask_token': '<mask>'});
+
+      final json = tokenizer.toJson();
+      final restored = TokenizerJsonLoader.fromJsonString(json);
+
+      expect(restored.vocabSize, equals(tokenizer.vocabSize));
+
+      // Encoding with custom token should work
+      final encoding = restored.encode('<custom> test', addSpecialTokens: false);
+      expect(encoding.tokens, contains('<custom>'));
+    });
+  });
+
+  group('HF Compatible: tokenize() Method', () {
+    late SentencePieceTokenizer tokenizer;
+
+    setUpAll(() {
+      tokenizer = createTestTokenizer();
+    });
+
+    test('tokenize returns List<String> like HuggingFace', () {
+      final tokens = tokenizer.tokenize('hello world');
+
+      expect(tokens, isA<List<String>>());
+      expect(tokens, isNotEmpty);
+    });
+
+    test('tokenize matches encode().tokens', () {
+      const text = 'This is a test sentence';
+
+      final tokens = tokenizer.tokenize(text);
+      final encoding = tokenizer.encode(text, addSpecialTokens: false);
+
+      expect(tokens, equals(encoding.tokens));
+    });
+
+    test('tokenize returns empty list for empty string', () {
+      final tokens = tokenizer.tokenize('');
+      expect(tokens, isEmpty);
+    });
+
+    test('tokenizeBatch processes multiple texts', () {
+      final texts = ['hello', 'world', 'test'];
+      final results = tokenizer.tokenizeBatch(texts);
+
+      expect(results.length, equals(3));
+      for (var i = 0; i < texts.length; i++) {
+        expect(results[i], equals(tokenizer.tokenize(texts[i])));
+      }
+    });
+  });
+
+  group('HF Compatible: getVocab() Method', () {
+    late SentencePieceTokenizer tokenizer;
+
+    setUpAll(() {
+      tokenizer = createTestTokenizer();
+    });
+
+    test('getVocab returns Map<String, int> like HuggingFace', () {
+      final vocab = tokenizer.getVocab();
+
+      expect(vocab, isA<Map<String, int>>());
+      expect(vocab.length, equals(tokenizer.vocabSize));
+    });
+
+    test('getVocab includes all tokens', () {
+      final vocab = tokenizer.getVocab();
+
+      // Check that special tokens are included
+      expect(vocab.containsKey(tokenizer.vocab.unkPiece), isTrue);
+      expect(vocab.containsKey(tokenizer.vocab.bosPiece), isTrue);
+      expect(vocab.containsKey(tokenizer.vocab.eosPiece), isTrue);
+    });
+
+    test('getVocab with withAddedTokens=false excludes added tokens', () {
+      final originalSize = tokenizer.vocabSize;
+      tokenizer.addTokens(['<extra_token>']);
+
+      final vocabWithAdded = tokenizer.getVocab(withAddedTokens: true);
+      final vocabWithoutAdded = tokenizer.getVocab(withAddedTokens: false);
+
+      expect(vocabWithAdded.length, equals(originalSize + 1));
+      expect(vocabWithoutAdded.length, equals(originalSize));
+      expect(vocabWithoutAdded.containsKey('<extra_token>'), isFalse);
+    });
+
+    test('vocab IDs are correct', () {
+      final vocab = tokenizer.getVocab();
+
+      for (final entry in vocab.entries) {
+        final token = entry.key;
+        final id = entry.value;
+
+        // ID should map back to the same token
+        expect(tokenizer.vocab.idToPiece(id), equals(token));
+      }
+    });
+  });
+
+  group('HF Compatible: convertTokensToIds / convertIdsToTokens', () {
+    late SentencePieceTokenizer tokenizer;
+
+    setUpAll(() {
+      tokenizer = createTestTokenizer();
+    });
+
+    test('convertTokensToIds works like HuggingFace', () {
+      final encoding = tokenizer.encode('hello world', addSpecialTokens: false);
+      final ids = tokenizer.convertTokensToIds(encoding.tokens);
+
+      expect(ids, equals(encoding.ids.toList()));
+    });
+
+    test('convertIdsToTokens works like HuggingFace', () {
+      final encoding = tokenizer.encode('test', addSpecialTokens: false);
+      final tokens = tokenizer.convertIdsToTokens(encoding.ids.toList());
+
+      expect(tokens, equals(encoding.tokens));
+    });
+
+    test('convertTokensToIds returns UNK for unknown tokens', () {
+      final ids = tokenizer.convertTokensToIds(['<unknown_xyz>']);
+
+      expect(ids.first, equals(tokenizer.vocab.unkId));
+    });
+
+    test('round-trip conversion is consistent', () {
+      final encoding = tokenizer.encode('hello world', addSpecialTokens: false);
+
+      final ids = tokenizer.convertTokensToIds(encoding.tokens);
+      final tokens = tokenizer.convertIdsToTokens(ids);
+      final idsAgain = tokenizer.convertTokensToIds(tokens);
+
+      expect(idsAgain, equals(ids));
+    });
+  });
+
+  group('HF Compatible: vocabSize Property', () {
+    test('vocabSize matches vocab.size', () {
+      final tokenizer = createTestTokenizer();
+
+      expect(tokenizer.vocabSize, equals(tokenizer.vocab.size));
+    });
+
+    test('vocabSize increases with addTokens', () {
+      final tokenizer = createTestTokenizer();
+      final originalSize = tokenizer.vocabSize;
+
+      tokenizer.addTokens(['<new1>', '<new2>']);
+
+      expect(tokenizer.vocabSize, equals(originalSize + 2));
     });
   });
 }
