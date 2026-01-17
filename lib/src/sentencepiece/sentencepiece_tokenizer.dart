@@ -17,6 +17,10 @@ export 'model/model_proto.dart' show ModelType;
 const _kMinBatchSizeForParallel = 8;
 const _kMaxInputLength = 500000;
 
+/// Maximum input text length in characters (1MB of UTF-16 characters).
+/// Prevents OOM from extremely large inputs.
+const _kMaxInputLength = 500000;
+
 /// Padding direction for batch encoding.
 enum SpPaddingDirection { right, left }
 
@@ -235,7 +239,15 @@ class SentencePieceTokenizer {
   }
 
   /// Encode text into token IDs.
+  ///
+  /// Throws [ArgumentError] if text exceeds maximum input length.
   Encoding encode(String text, {bool? addSpecialTokens}) {
+    if (text.length > _kMaxInputLength) {
+      throw ArgumentError(
+        'Input text too long: ${text.length} characters exceeds maximum of $_kMaxInputLength',
+      );
+    }
+
     final shouldAddBos = addSpecialTokens ?? config.addBosToken;
     final shouldAddEos = addSpecialTokens ?? config.addEosToken;
 
@@ -393,6 +405,17 @@ class SentencePieceTokenizer {
     int? maxLength,
     TruncationStrategy strategy = TruncationStrategy.longestFirst,
   }) {
+    if (text.length > _kMaxInputLength) {
+      throw ArgumentError(
+        'First input text too long: ${text.length} characters exceeds maximum of $_kMaxInputLength',
+      );
+    }
+    if (textPair.length > _kMaxInputLength) {
+      throw ArgumentError(
+        'Second input text too long: ${textPair.length} characters exceeds maximum of $_kMaxInputLength',
+      );
+    }
+
     final shouldAddBos = addSpecialTokens ?? config.addBosToken;
     final shouldAddEos = addSpecialTokens ?? config.addEosToken;
 

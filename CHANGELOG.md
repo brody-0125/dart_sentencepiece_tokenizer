@@ -105,6 +105,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Compatibility
 
-- Dart SDK 3.0.0+
+- Dart SDK 3.10.7+
 - Compatible with Llama, Gemma, and other SentencePiece models
 - HuggingFace-compatible API design
