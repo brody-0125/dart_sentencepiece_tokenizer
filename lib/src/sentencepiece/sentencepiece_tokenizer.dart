@@ -21,6 +21,10 @@ const _kMaxInputLength = 500000;
 /// Prevents OOM from extremely large inputs.
 const _kMaxInputLength = 500000;
 
+/// Maximum input text length in characters (1MB of UTF-16 characters).
+/// Prevents OOM from extremely large inputs.
+const _kMaxInputLength = 500000;
+
 /// Padding direction for batch encoding.
 enum SpPaddingDirection { right, left }
 
