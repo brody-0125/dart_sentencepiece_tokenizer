@@ -15,3 +15,8 @@ export 'src/sentencepiece/sentencepiece_tokenizer.dart'
         SpTruncationConfig,
         SpTruncationDirection,
         ModelType;
+export 'src/sentencepiece/serialization/tokenizer_json.dart'
+    show
+        SentencePieceTokenizerJson,
+        TokenizerJsonLoader,
+        kTokenizerJsonVersion;

@@ -5,31 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2025-01-04
-
-### Changed
-
-- **BPE Algorithm Optimization**: Replaced list-based merge operations with doubly-linked list structure for O(1) merge operations
-- **Merge Cache**: Added caching for pair lookups to avoid redundant string concatenation and vocabulary checks
+## [1.2.0] - 2025-01-17
 
 ### Added
 
-- **Input Size Validation**: Added maximum input length limit (500,000 characters) to prevent OOM errors
-  - `encode()` and `encodePair()` now throw `ArgumentError` for oversized inputs
-  - Validation applies to all encoding methods including batch operations
+- **JSON Serialization** - HuggingFace-compatible tokenizer.json format
+  - `toJson()` - Serialize tokenizer to JSON string
+  - `saveToJson()` / `saveToJsonSync()` - Save to file
+  - `TokenizerJsonLoader.fromJsonString()` - Load from JSON string
+  - `TokenizerJsonLoader.fromJsonFile()` / `fromJsonFileSync()` - Load from file
 
-### Removed
+- **Dynamic Token Addition API**
+  - `addTokens(List<String>)` - Add new tokens to vocabulary
+  - `addSpecialTokens(Map<String, String>)` - Add special tokens (pad, mask, etc.)
+  - `getAddedVocab()` - Get map of dynamically added tokens
+  - `isAddedToken(String)` - Check if token was added dynamically
+  - `getVocab({withAddedTokens})` - Get full vocabulary as Map<String, int>
 
-- Removed unused `TokenResult` class from `tokenization_algorithm.dart`
+- **HuggingFace-compatible Methods**
+  - `tokenize(String)` - Returns List<String> of tokens
+  - `tokenizeBatch(List<String>)` - Batch tokenization
 
-### Performance
+- **Optimized BPE Algorithm** (`BpeAlgorithmOptimized`)
+  - O(n log n) complexity using priority queue (heap)
+  - ~35% faster than original algorithm on medium-length text
 
-- BPE tokenization now uses O(1) node merging instead of O(n) list reconstruction
-- Merge pair lookups are cached, reducing redundant vocabulary checks
+### Changed
 
----
+- `SpVocabulary` now uses growable list for dynamic token addition support
 
-## [1.0.0] - 2025-01-04
+## [1.1.0] - 2025-01-04
+
+### Added
+
+- Input length validation (max 500,000 characters) to prevent OOM
+- Example usage file (`example/example.dart`)
+
+### Changed
+
+- Improved BPE algorithm efficiency
+- Enhanced error messages for input validation
+
+## [1.0.0] - 2025-01-03
 
 ### Added
 
