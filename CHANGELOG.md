@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2025-01-28
+
+### Changed
+
+- Optimized batch `addTokens()` to use single typed array allocation instead of per-token expansion (O(N) instead of O(N²))
+- Added input validation and defensive error handling in JSON deserialization (`TokenizerJsonLoader`)
+- Consolidated duplicate `_kMaxInputLength` constant declarations
+
 ## [1.2.0] - 2025-01-17
 
 ### Added
@@ -55,7 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for BPE (Byte Pair Encoding) algorithm used by Gemma models
 - Support for Unigram algorithm used by Llama models
 - Viterbi algorithm implementation for optimal Unigram segmentation
-- Byte fallback support for handling unknown characters
+- Byte fallback support for handling unknΩown characters
 - Unicode-aware Trie for efficient vocabulary lookup
 - Memory-efficient typed arrays (Int32List, Uint8List) for encodings
 

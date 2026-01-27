@@ -1,6 +1,6 @@
 # dart_sentencepiece_tokenizer
 
-![Dart](https://img.shields.io/badge/Dart-3.10+-0175C2.svg?logo=dart)
+![Dart](https://img.shields.io/badge/Dart-3.10.7+-0175C2.svg?logo=dart)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Compatible-FF6600)
 
@@ -15,13 +15,13 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **Full API** - Encoding, decoding, padding, truncation, offset mapping
 - **Batch Processing** - Sequential and parallel (Isolate-based) batch encoding
 - **HuggingFace Compatible** - JSON serialization, dynamic token addition, tokenize() API
-- **Well Tested** - 223 tests with 100% pass rate
+- **Well Tested** - 239 tests with 100% pass rate
 
 ## Installation
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.2.0
+  dart_sentencepiece_tokenizer: ^1.2.1
 ```
 
 ## Quick Start
@@ -398,7 +398,7 @@ Format: Binary protobuf (.model files from SentencePiece C++ library).
 ## Testing
 
 ```bash
-# Run all tests (223 tests)
+# Run all tests (239 tests)
 dart test
 
 # Run specific test file

@@ -15,11 +15,6 @@ export '../encoding.dart' show Encoding, TruncationStrategy;
 export 'model/model_proto.dart' show ModelType;
 
 const _kMinBatchSizeForParallel = 8;
-const _kMaxInputLength = 500000;
-
-/// Maximum input text length in characters (1MB of UTF-16 characters).
-/// Prevents OOM from extremely large inputs.
-const _kMaxInputLength = 500000;
 
 /// Maximum input text length in characters (1MB of UTF-16 characters).
 /// Prevents OOM from extremely large inputs.

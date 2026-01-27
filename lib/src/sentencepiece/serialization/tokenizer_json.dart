@@ -106,28 +106,57 @@ class TokenizerJsonLoader {
     // Validate version
     final version = data['version'] as String?;
     if (version == null) {
-      throw FormatException('Missing version in tokenizer JSON');
+      throw const FormatException('Missing version in tokenizer JSON');
     }
 
     // Parse model type
-    final modelTypeStr = data['model_type'] as String;
+    final modelTypeStr = data['model_type'] as String?;
+    if (modelTypeStr == null) {
+      throw const FormatException('Missing model_type in tokenizer JSON');
+    }
     final modelType = ModelType.values.firstWhere(
       (t) => t.name == modelTypeStr,
       orElse: () => ModelType.unigram,
     );
 
     // Parse vocabulary
-    final vocabData = data['vocab'] as Map<String, dynamic>;
-    final pieces = (vocabData['pieces'] as List).cast<String>();
-    final scores = (vocabData['scores'] as List).cast<num>().map((n) => n.toDouble()).toList();
-    final types = (vocabData['types'] as List).cast<int>();
+    final vocabData = data['vocab'] as Map<String, dynamic>?;
+    if (vocabData == null) {
+      throw const FormatException('Missing vocab in tokenizer JSON');
+    }
+    final rawPieces = vocabData['pieces'] as List?;
+    final rawScores = vocabData['scores'] as List?;
+    final rawTypes = vocabData['types'] as List?;
+    if (rawPieces == null || rawScores == null || rawTypes == null) {
+      throw const FormatException(
+        'Missing vocab fields (pieces, scores, types) in tokenizer JSON',
+      );
+    }
+    final pieces = rawPieces.cast<String>();
+    final scores = rawScores.cast<num>().map((n) => n.toDouble()).toList();
+    final types = rawTypes.cast<int>();
+
+    if (pieces.length != scores.length || pieces.length != types.length) {
+      throw FormatException(
+        'Vocab arrays have inconsistent lengths: '
+        'pieces=${pieces.length}, scores=${scores.length}, types=${types.length}',
+      );
+    }
 
     // Parse special tokens
-    final specialTokens = data['special_tokens'] as Map<String, dynamic>;
-    final unkData = specialTokens['unk'] as Map<String, dynamic>;
-    final bosData = specialTokens['bos'] as Map<String, dynamic>;
-    final eosData = specialTokens['eos'] as Map<String, dynamic>;
-    final padData = specialTokens['pad'] as Map<String, dynamic>;
+    final specialTokens = data['special_tokens'] as Map<String, dynamic>?;
+    if (specialTokens == null) {
+      throw const FormatException('Missing special_tokens in tokenizer JSON');
+    }
+    final unkData = specialTokens['unk'] as Map<String, dynamic>?;
+    final bosData = specialTokens['bos'] as Map<String, dynamic>?;
+    final eosData = specialTokens['eos'] as Map<String, dynamic>?;
+    final padData = specialTokens['pad'] as Map<String, dynamic>?;
+    if (unkData == null || bosData == null || eosData == null || padData == null) {
+      throw const FormatException(
+        'Missing special token entries (unk, bos, eos, pad) in tokenizer JSON',
+      );
+    }
 
     // Parse normalizer settings
     final normalizerData = data['normalizer'] as Map<String, dynamic>;

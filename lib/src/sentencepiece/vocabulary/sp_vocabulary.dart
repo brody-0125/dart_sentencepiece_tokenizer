@@ -192,23 +192,37 @@ class SpVocabulary {
   ///
   /// Returns the number of tokens actually added (excluding duplicates).
   int addTokens(List<String> tokens, {double score = 0.0}) {
-    var added = 0;
+    // Filter duplicates first to enable batch allocation
+    final newTokens = <String>[];
     for (final token in tokens) {
-      if (_pieceToId.containsKey(token)) continue;
+      if (!_pieceToId.containsKey(token)) {
+        newTokens.add(token);
+      }
+    }
+    if (newTokens.isEmpty) return 0;
 
-      final id = _idToPiece.length;
+    // Batch-expand typed arrays once
+    final oldSize = _scores.length;
+    final newSize = oldSize + newTokens.length;
+    final expandedScores = Float32List(newSize);
+    expandedScores.setRange(0, oldSize, _scores);
+    final expandedTypes = Uint8List(newSize);
+    expandedTypes.setRange(0, oldSize, _types);
+
+    for (var i = 0; i < newTokens.length; i++) {
+      final token = newTokens[i];
+      final id = oldSize + i;
       _pieceToId[token] = id;
       _idToPiece.add(token);
-
-      // Expand typed arrays
-      _scores = _expandFloat32List(_scores, score);
-      _types = _expandUint8List(_types, PieceType.userDefined.value);
-
+      expandedScores[id] = score;
+      expandedTypes[id] = PieceType.userDefined.value;
       _trie.insert(token, id);
       _addedTokenIds.add(id);
-      added++;
     }
-    return added;
+
+    _scores = expandedScores;
+    _types = expandedTypes;
+    return newTokens.length;
   }
 
   /// Add a special token to the vocabulary.
