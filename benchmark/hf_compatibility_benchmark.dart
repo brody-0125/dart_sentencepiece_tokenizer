@@ -385,7 +385,7 @@ const _singleEncodingTestCases = [
   ),
 ];
 
-const _edgeCaseTestCases = [
+final _edgeCaseTestCases = [
   EdgeCaseTestCase(name: 'Empty string', input: ''),
   EdgeCaseTestCase(name: 'Single space', input: ' '),
   EdgeCaseTestCase(name: 'Multiple spaces', input: '   '),

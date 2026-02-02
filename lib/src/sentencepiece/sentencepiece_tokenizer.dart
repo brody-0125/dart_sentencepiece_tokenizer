@@ -9,6 +9,7 @@ import 'algorithm/unigram_algorithm.dart';
 import 'model/model_proto.dart';
 import 'model/sentencepiece_model.dart';
 import 'normalizer/sp_normalizer.dart';
+import 'streaming/text_streamer.dart';
 import 'vocabulary/sp_vocabulary.dart';
 
 export '../encoding.dart' show Encoding, TruncationStrategy;
@@ -670,6 +671,111 @@ class SentencePieceTokenizer {
     return idsBatch
         .map((ids) => decode(ids, skipSpecialTokens: skipSpecialTokens))
         .toList();
+  }
+
+  /// Decode a stream of token IDs to a stream of text chunks.
+  ///
+  /// This is designed for LLM streaming output where tokens arrive one at a time.
+  /// The decoder handles incomplete UTF-8 sequences from byte tokens by buffering
+  /// until complete characters can be formed.
+  ///
+  /// Example:
+  /// ```dart
+  /// final textStream = tokenizer.decodeStream(llmTokenStream);
+  /// await for (final chunk in textStream) {
+  ///   stdout.write(chunk); // Display incrementally
+  /// }
+  /// ```
+  Stream<String> decodeStream(
+    Stream<int> tokenIds, {
+    bool skipSpecialTokens = true,
+  }) async* {
+    final chunks = <String>[];
+    final streamer = createTextStreamer(
+      skipSpecialTokens: skipSpecialTokens,
+      onFinalizedText: (text, {required streamEnd}) {
+        if (text.isNotEmpty) chunks.add(text);
+      },
+    );
+
+    await for (final id in tokenIds) {
+      streamer.put(id);
+      // Yield any chunks that were emitted
+      while (chunks.isNotEmpty) {
+        yield chunks.removeAt(0);
+      }
+    }
+
+    // Flush remaining content
+    streamer.end();
+    while (chunks.isNotEmpty) {
+      yield chunks.removeAt(0);
+    }
+  }
+
+  /// Decode token IDs with a callback for each text chunk.
+  ///
+  /// This is useful when you want to process text incrementally without
+  /// using streams (e.g., for direct UI updates).
+  ///
+  /// Example:
+  /// ```dart
+  /// tokenizer.decodeWithCallback(
+  ///   tokenIds,
+  ///   (chunk) => stdout.write(chunk),
+  /// );
+  /// ```
+  void decodeWithCallback(
+    List<int> ids,
+    void Function(String chunk) onChunk, {
+    bool skipSpecialTokens = true,
+  }) {
+    final streamer = createTextStreamer(
+      skipSpecialTokens: skipSpecialTokens,
+      onFinalizedText: (text, {required streamEnd}) {
+        if (text.isNotEmpty) onChunk(text);
+      },
+    );
+
+    for (final id in ids) {
+      streamer.put(id);
+    }
+    streamer.end();
+  }
+
+  /// Create a TextStreamer for HuggingFace-compatible streaming.
+  ///
+  /// This is the recommended API for LLM token streaming, matching
+  /// HuggingFace's `TextStreamer` interface with `put()` and `end()` methods.
+  ///
+  /// Example:
+  /// ```dart
+  /// final streamer = tokenizer.createTextStreamer(
+  ///   onFinalizedText: (text, {required streamEnd}) => stdout.write(text),
+  /// );
+  /// for (final tokenId in llmOutput) {
+  ///   streamer.put(tokenId);
+  /// }
+  /// streamer.end();
+  /// ```
+  ///
+  /// [skipSpecialTokens] - Whether to skip special tokens like BOS/EOS.
+  /// [skipPrompt] - Whether to skip the initial prompt tokens.
+  /// [promptLength] - Number of prompt tokens to skip (when [skipPrompt] is true).
+  /// [onFinalizedText] - Callback for finalized text chunks.
+  TextStreamer createTextStreamer({
+    bool skipSpecialTokens = true,
+    bool skipPrompt = false,
+    int promptLength = 1,
+    OnFinalizedText? onFinalizedText,
+  }) {
+    return TextStreamer(
+      this,
+      skipSpecialTokens: skipSpecialTokens,
+      skipPrompt: skipPrompt,
+      promptLength: promptLength,
+      onFinalizedText: onFinalizedText,
+    );
   }
 
   /// Convert tokens to IDs.

@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-02
+
+### Added
+
+- **Streaming API (HuggingFace TextStreamer Compatible)**
+  - `BaseStreamer` - Abstract interface for streaming token decoders with `put()` and `end()` methods
+  - `TextStreamer` - HuggingFace TextStreamer-compatible class for real-time LLM token decoding
+    - `put(int tokenId)` - Add tokens as they are generated
+    - `end()` - Signal end of generation and flush remaining content
+    - `onFinalizedText` callback for custom text handling
+    - `skipSpecialTokens` option to filter BOS/EOS/PAD tokens
+    - `skipPrompt` option to skip initial prompt tokens
+    - `promptLength` option to skip multiple prompt tokens
+    - Word boundary heuristics for clean text emission (newlines, CJK, spaces)
+  - `SentencePieceTokenizer.createTextStreamer()` - Factory for TextStreamer
+  - `SentencePieceTokenizer.decodeStream()` - Stream-based token decoding
+  - `SentencePieceTokenizer.decodeWithCallback()` - Callback-based token decoding
+
+### Usage Examples
+
+**TextStreamer (HuggingFace-compatible):**
+
+```dart
+final streamer = tokenizer.createTextStreamer();
+for (final id in llmOutput) {
+  streamer.put(id);
+}
+streamer.end();
+
+// With custom callback
+final streamer = tokenizer.createTextStreamer(
+  onFinalizedText: (text, {required streamEnd}) {
+    myTextController.append(text);
+    if (streamEnd) myTextController.complete();
+  },
+);
+```
+
+**Stream-based decoding:**
+
+```dart
+final textStream = tokenizer.decodeStream(llmTokenStream);
+await for (final chunk in textStream) {
+  stdout.write(chunk);
+}
+```
+
+**Callback-based decoding:**
+
+```dart
+tokenizer.decodeWithCallback(
+  tokenIds,
+  (chunk) => stdout.write(chunk),
+);
+```
+
 ## [1.2.2] - 2025-01-28
 
 ### Changed

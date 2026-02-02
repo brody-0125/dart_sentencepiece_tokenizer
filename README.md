@@ -14,14 +14,15 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **Optimized BPE** - O(1) merge operations with linked list and merge caching
 - **Full API** - Encoding, decoding, padding, truncation, offset mapping
 - **Batch Processing** - Sequential and parallel (Isolate-based) batch encoding
+- **Streaming API** - HuggingFace TextStreamer compatible for real-time LLM output
 - **HuggingFace Compatible** - JSON serialization, dynamic token addition, tokenize() API
-- **Well Tested** - 249 tests with 100% pass rate
+- **Well Tested** - 274 tests with 100% pass rate
 
 ## Installation
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.2.2
+  dart_sentencepiece_tokenizer: ^1.3.0
 ```
 
 ## Quick Start
@@ -254,6 +255,51 @@ final text = tokenizer.decode(encoding.ids);
 final texts = tokenizer.decodeBatch(idsBatch);
 ```
 
+### Streaming API (v1.3.0+)
+
+Real-time token decoding for LLM output, compatible with HuggingFace's TextStreamer.
+
+```dart
+// Basic streaming with default stdout output
+final streamer = tokenizer.createTextStreamer();
+for (final tokenId in llmOutput) {
+  streamer.put(tokenId);
+}
+streamer.end();
+
+// Custom callback for streaming
+final streamer = tokenizer.createTextStreamer(
+  onFinalizedText: (text, {required streamEnd}) {
+    myTextController.append(text);
+    if (streamEnd) myTextController.complete();
+  },
+);
+
+// Stream-based decoding
+final textStream = tokenizer.decodeStream(llmTokenStream);
+await for (final chunk in textStream) {
+  stdout.write(chunk);
+}
+
+// Callback-based decoding
+tokenizer.decodeWithCallback(
+  tokenIds,
+  (chunk) => stdout.write(chunk),
+);
+
+// Skip prompt tokens (useful for chat models)
+final streamer = tokenizer.createTextStreamer(
+  skipPrompt: true,
+  promptLength: 10, // Skip first 10 tokens
+);
+```
+
+**Streaming Features:**
+- Word boundary heuristics for clean text emission
+- CJK character detection for immediate output
+- Skip special tokens option
+- Skip prompt tokens with configurable length
+
 ## ONNX Runtime Integration
 
 Use with ONNX Runtime for on-device ML inference:
@@ -341,6 +387,17 @@ final customTokenizer = SentencePieceTokenizer.fromModelFileSync(
 | `toJson()` | Serialize to JSON string |
 | `saveToJson(path)` | Save to JSON file (async) |
 | `saveToJsonSync(path)` | Save to JSON file (sync) |
+| `createTextStreamer(...)` | Create HuggingFace-compatible streamer |
+| `decodeStream(tokenStream)` | Decode token stream to text stream |
+| `decodeWithCallback(ids, callback)` | Decode with callback |
+
+### TextStreamer
+
+| Method | Description |
+|--------|-------------|
+| `put(tokenId)` | Add token to stream |
+| `end()` | Signal end of generation |
+| `reset()` | Reset internal state |
 
 ### TokenizerJsonLoader
 
@@ -398,7 +455,7 @@ Format: Binary protobuf (.model files from SentencePiece C++ library).
 ## Testing
 
 ```bash
-# Run all tests (249 tests)
+# Run all tests (274 tests)
 dart test
 
 # Run specific test file
@@ -409,6 +466,9 @@ dart run benchmark/performance_benchmark.dart
 
 # Run HuggingFace compatibility benchmark
 dart run benchmark/hf_compatibility_benchmark.dart
+
+# Run streaming benchmark
+dart run benchmark/streaming_benchmark.dart
 ```
 
 ### HuggingFace Compatibility Verification
