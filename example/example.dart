@@ -53,4 +53,64 @@ void main() async {
   print('Vocab size: ${tokenizer.vocabSize}');
   print('BOS ID: ${tokenizer.vocab.bosId}');
   print('EOS ID: ${tokenizer.vocab.eosId}');
+
+  // ========================================
+  // Streaming API (v1.3.0+)
+  // ========================================
+
+  // TextStreamer - HuggingFace compatible streaming
+  // Useful for displaying LLM output in real-time
+  print('\n--- Streaming API ---');
+
+  // Basic streaming with default stdout output
+  final streamer = tokenizer.createTextStreamer();
+  final tokens = tokenizer.encode('Hello, streaming world!');
+  print('Streaming output: ');
+  for (final id in tokens.ids) {
+    streamer.put(id);
+  }
+  streamer.end();
+
+  // Custom callback for streaming
+  final chunks = <String>[];
+  final customStreamer = tokenizer.createTextStreamer(
+    onFinalizedText: (text, {required streamEnd}) {
+      chunks.add(text);
+      if (streamEnd) {
+        print('Stream ended');
+      }
+    },
+  );
+
+  for (final id in tokens.ids) {
+    customStreamer.put(id);
+  }
+  customStreamer.end();
+  print('Collected chunks: $chunks');
+
+  // Stream-based decoding
+  final tokenStream = Stream.fromIterable(tokens.ids.toList());
+  final textStream = tokenizer.decodeStream(tokenStream);
+  final result = StringBuffer();
+  await for (final chunk in textStream) {
+    result.write(chunk);
+  }
+  print('Stream result: $result');
+
+  // Callback-based decoding
+  final callbackResult = StringBuffer();
+  tokenizer.decodeWithCallback(
+    tokens.ids.toList(),
+    (chunk) => callbackResult.write(chunk),
+  );
+  print('Callback result: $callbackResult');
+
+  // Skip prompt tokens (useful for chat models)
+  final promptStreamer = tokenizer.createTextStreamer(
+    skipPrompt: true,
+    promptLength: 3, // Skip first 3 tokens
+    onFinalizedText: (text, {required streamEnd}) => print(text),
+  );
+  // Feed tokens...
+  promptStreamer.end();
 }

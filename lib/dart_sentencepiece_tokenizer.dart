@@ -20,3 +20,6 @@ export 'src/sentencepiece/serialization/tokenizer_json.dart'
         SentencePieceTokenizerJson,
         TokenizerJsonLoader,
         kTokenizerJsonVersion;
+export 'src/sentencepiece/streaming/base_streamer.dart' show BaseStreamer;
+export 'src/sentencepiece/streaming/text_streamer.dart'
+    show TextStreamer, OnFinalizedText;
