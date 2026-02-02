@@ -117,6 +117,8 @@ class BpeAlgorithmOptimized implements TokenizationAlgorithm {
   /// Cache for merged pair lookups: "symbol1\x00symbol2" -> (mergedString, score)
   final Map<String, (String, double)?> _mergeCache = {};
 
+  static const _kMaxCacheSize = 10000;
+
   /// Version counter for each node position to invalidate stale queue entries.
   final Map<int, int> _nodeVersions = {};
 
@@ -282,6 +284,12 @@ class BpeAlgorithmOptimized implements TokenizationAlgorithm {
     }
 
     _mergeCache[cacheKey] = null;
+    if (_mergeCache.length > _kMaxCacheSize) {
+      final keys = _mergeCache.keys.toList();
+      for (var i = 0; i < keys.length ~/ 2; i++) {
+        _mergeCache.remove(keys[i]);
+      }
+    }
     return null;
   }
 

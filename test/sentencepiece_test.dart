@@ -9,6 +9,8 @@ import 'package:dart_sentencepiece_tokenizer/src/sentencepiece/vocabulary/sp_voc
 import 'package:dart_sentencepiece_tokenizer/src/sentencepiece/algorithm/bpe_algorithm.dart';
 import 'package:dart_sentencepiece_tokenizer/src/sentencepiece/algorithm/unigram_algorithm.dart';
 
+import 'test_utils.dart';
+
 void main() {
   group('ProtobufReader', () {
     test('readVarint for small numbers', () {
@@ -309,6 +311,123 @@ void main() {
     test('llama config', () {
       expect(SentencePieceConfig.llama.addBosToken, isTrue);
       expect(SentencePieceConfig.llama.addEosToken, isFalse);
+    });
+  });
+
+  group('SentencePieceTokenizer addTokens', () {
+    late SentencePieceTokenizer tokenizer;
+
+    setUp(() {
+      tokenizer = createTestTokenizer();
+    });
+
+    test('adding many tokens at once works correctly', () {
+      final tokens = List.generate(100, (i) => '<batch_$i>');
+      final originalSize = tokenizer.vocabSize;
+
+      final added = tokenizer.addTokens(tokens);
+
+      expect(added, equals(100));
+      expect(tokenizer.vocabSize, equals(originalSize + 100));
+
+      // Verify each token is accessible
+      for (var i = 0; i < 100; i++) {
+        final token = '<batch_$i>';
+        expect(tokenizer.vocab.contains(token), isTrue);
+        expect(tokenizer.isAddedToken(token), isTrue);
+      }
+    });
+
+    test('batch add with mixed duplicates works correctly', () {
+      tokenizer.addTokens(['<existing>']);
+      final sizeAfterFirst = tokenizer.vocabSize;
+
+      final tokens = ['<existing>', '<new1>', '<new2>', '<existing>'];
+      final added = tokenizer.addTokens(tokens);
+
+      expect(added, equals(2));
+      expect(tokenizer.vocabSize, equals(sizeAfterFirst + 2));
+    });
+
+    test('batch add with all duplicates returns zero', () {
+      tokenizer.addTokens(['<a>', '<b>']);
+      final size = tokenizer.vocabSize;
+
+      final added = tokenizer.addTokens(['<a>', '<b>']);
+
+      expect(added, equals(0));
+      expect(tokenizer.vocabSize, equals(size));
+    });
+
+    test('added tokens encode correctly after batch add', () {
+      tokenizer.addTokens(['<TAG1>', '<TAG2>', '<TAG3>']);
+
+      final encoding = tokenizer.encode(
+        'test <TAG1> and <TAG2>',
+        addSpecialTokens: false,
+      );
+
+      expect(encoding.tokens, contains('<TAG1>'));
+      expect(encoding.tokens, contains('<TAG2>'));
+    });
+  });
+
+  group('SentencePieceTokenizer BPE consistency', () {
+    test('BPE tokenization produces consistent results', () {
+      final tokenizer = createTestTokenizer();
+
+      // Run multiple times to verify determinism
+      const text = 'hello world test';
+      final first = tokenizer.encode(text, addSpecialTokens: false);
+      final second = tokenizer.encode(text, addSpecialTokens: false);
+
+      expect(first.ids.toList(), equals(second.ids.toList()));
+      expect(first.tokens, equals(second.tokens));
+    });
+  });
+
+  group('SentencePieceTokenizer input validation', () {
+    late SentencePieceTokenizer tokenizer;
+
+    setUpAll(() {
+      tokenizer = createTestTokenizer();
+    });
+
+    test('encode throws for too long input', () {
+      final longText = 'a' * 600000;
+
+      expect(
+        () => tokenizer.encode(longText),
+        throwsArgumentError,
+      );
+    });
+
+    test('encode accepts input at max length', () {
+      // Should not throw for exactly 500000 chars
+      final text = 'a' * 500000;
+
+      expect(
+        () => tokenizer.encode(text),
+        returnsNormally,
+      );
+    });
+
+    test('encodePair throws for too long first text', () {
+      final longText = 'a' * 600000;
+
+      expect(
+        () => tokenizer.encodePair(longText, 'short'),
+        throwsArgumentError,
+      );
+    });
+
+    test('encodePair throws for too long second text', () {
+      final longText = 'a' * 600000;
+
+      expect(
+        () => tokenizer.encodePair('short', longText),
+        throwsArgumentError,
+      );
     });
   });
 }

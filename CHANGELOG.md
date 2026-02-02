@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2025-01-28
+
+### Changed
+
+- Extracted duplicate surrogate pair decoding logic in `Trie` into shared `_decodeCodePoint` helper
+- Cached computed `sequenceIds` in `Encoding` to avoid O(n) recomputation on repeated access
+- Added merge cache size limit (10,000 entries) to `BpeAlgorithm` and `BpeAlgorithmOptimized` to prevent unbounded memory growth
+- Replaced manual loops with `fillRange` for padding initialization in `Encoding.withPadding()`
+
 ## [1.2.1] - 2025-01-28
 
 ### Changed
