@@ -15,13 +15,13 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **Full API** - Encoding, decoding, padding, truncation, offset mapping
 - **Batch Processing** - Sequential and parallel (Isolate-based) batch encoding
 - **HuggingFace Compatible** - JSON serialization, dynamic token addition, tokenize() API
-- **Well Tested** - 239 tests with 100% pass rate
+- **Well Tested** - 249 tests with 100% pass rate
 
 ## Installation
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.2.1
+  dart_sentencepiece_tokenizer: ^1.2.2
 ```
 
 ## Quick Start
@@ -398,7 +398,7 @@ Format: Binary protobuf (.model files from SentencePiece C++ library).
 ## Testing
 
 ```bash
-# Run all tests (239 tests)
+# Run all tests (249 tests)
 dart test
 
 # Run specific test file

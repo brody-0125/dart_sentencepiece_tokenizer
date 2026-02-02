@@ -41,30 +41,33 @@ class Trie {
 
   bool contains(String token) => lookup(token) != null;
 
+  /// Decode the code point at [index] in [text], handling surrogate pairs.
+  /// Returns `(codePoint, nextIndex)` where nextIndex is the position after
+  /// this code point (skips the low surrogate for surrogate pairs).
+  static (int, int) _decodeCodePoint(String text, int index) {
+    final codeUnit = text.codeUnitAt(index);
+    if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF && index + 1 < text.length) {
+      final low = text.codeUnitAt(index + 1);
+      if (low >= 0xDC00 && low <= 0xDFFF) {
+        return (
+          0x10000 + ((codeUnit - 0xD800) << 10) + (low - 0xDC00),
+          index + 2,
+        );
+      }
+    }
+    return (codeUnit, index + 1);
+  }
+
   TrieMatch? findLongestPrefix(String text, [int startIndex = 0]) {
     var node = _root;
     TrieMatch? lastMatch;
 
-    for (var i = startIndex; i < text.length; i++) {
-      final codeUnit = text.codeUnitAt(i);
-
-      int codePoint;
-      if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF && i + 1 < text.length) {
-        final low = text.codeUnitAt(i + 1);
-        if (low >= 0xDC00 && low <= 0xDFFF) {
-          codePoint = 0x10000 + ((codeUnit - 0xD800) << 10) + (low - 0xDC00);
-          i++;
-        } else {
-          codePoint = codeUnit;
-        }
-      } else {
-        codePoint = codeUnit;
-      }
+    var i = startIndex;
+    while (i < text.length) {
+      final (codePoint, nextI) = _decodeCodePoint(text, i);
 
       final child = node.children[codePoint];
-      if (child == null) {
-        break;
-      }
+      if (child == null) break;
 
       node = child;
 
@@ -73,9 +76,10 @@ class Trie {
           token: node.token!,
           tokenId: node.tokenId!,
           start: startIndex,
-          end: i + 1,
+          end: nextI,
         );
       }
+      i = nextI;
     }
 
     return lastMatch;
@@ -85,26 +89,12 @@ class Trie {
     final matches = <TrieMatch>[];
     var node = _root;
 
-    for (var i = startIndex; i < text.length; i++) {
-      final codeUnit = text.codeUnitAt(i);
-
-      int codePoint;
-      if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF && i + 1 < text.length) {
-        final low = text.codeUnitAt(i + 1);
-        if (low >= 0xDC00 && low <= 0xDFFF) {
-          codePoint = 0x10000 + ((codeUnit - 0xD800) << 10) + (low - 0xDC00);
-          i++;
-        } else {
-          codePoint = codeUnit;
-        }
-      } else {
-        codePoint = codeUnit;
-      }
+    var i = startIndex;
+    while (i < text.length) {
+      final (codePoint, nextI) = _decodeCodePoint(text, i);
 
       final child = node.children[codePoint];
-      if (child == null) {
-        break;
-      }
+      if (child == null) break;
 
       node = child;
 
@@ -114,10 +104,11 @@ class Trie {
             token: node.token!,
             tokenId: node.tokenId!,
             start: startIndex,
-            end: i + 1,
+            end: nextI,
           ),
         );
       }
+      i = nextI;
     }
 
     return matches;

@@ -11,6 +11,7 @@ class Encoding {
   final List<(int, int)> offsets;
   final List<int?> wordIds;
   final List<int?>? _sequenceIds;
+  List<int?>? _cachedSequenceIds;
 
   Encoding({
     required this.tokens,
@@ -51,7 +52,7 @@ class Encoding {
   List<int?> get sequenceIds {
     if (_sequenceIds != null) return _sequenceIds;
 
-    return List.generate(length, (i) {
+    return _cachedSequenceIds ??= List.generate(length, (i) {
       if (specialTokensMask[i] == 1) return null;
       return typeIds[i];
     });
@@ -249,9 +250,7 @@ class Encoding {
     paddedTokens.setRange(dstOffset, dstOffset + srcLen, tokens);
 
     final paddedIds = Int32List(targetLength);
-    for (var i = 0; i < targetLength; i++) {
-      paddedIds[i] = padTokenId;
-    }
+    paddedIds.fillRange(0, targetLength, padTokenId);
     paddedIds.setRange(dstOffset, dstOffset + srcLen, ids);
 
     final paddedTypeIds = Uint8List(targetLength);
@@ -261,9 +260,7 @@ class Encoding {
     paddedAttentionMask.setRange(dstOffset, dstOffset + srcLen, attentionMask);
 
     final paddedSpecialTokensMask = Uint8List(targetLength);
-    for (var i = 0; i < targetLength; i++) {
-      paddedSpecialTokensMask[i] = 1;
-    }
+    paddedSpecialTokensMask.fillRange(0, targetLength, 1);
     paddedSpecialTokensMask.setRange(
       dstOffset,
       dstOffset + srcLen,
