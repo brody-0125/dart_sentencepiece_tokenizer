@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-04-03
+
+### Added
+
+- **HuggingFace `tokenizer.json` Format Support**
+  - `HuggingFaceTokenizerLoader` class for loading HuggingFace tokenizer.json files directly
+    - `fromJsonString()` / `fromMap()` - Parse from JSON string or pre-parsed map
+    - `fromJsonFile()` / `fromJsonFileSync()` - Load from file (async/sync)
+  - Supports both **Unigram** (Llama) and **BPE** (Gemma) model types
+  - Automatic detection of special tokens (unk, bos, eos, pad) from `added_tokens` section
+  - Normalizer settings inference (addDummyPrefix, escapeWhitespaces) from HuggingFace normalizer config
+  - Post-processor configuration parsing (addBosToken, addEosToken) from TemplateProcessing
+  - Byte fallback detection from decoder configuration
+  - Added tokens handling beyond base vocabulary
+  - `TokenizerJsonLoader.isHuggingFaceFormat()` - Helper to detect HuggingFace format
+  - Auto-detection in `TokenizerJsonLoader` - Automatically delegates to `HuggingFaceTokenizerLoader` when HuggingFace format is detected
+
 ## [1.3.0] - 2026-02-02
 
 ### Added

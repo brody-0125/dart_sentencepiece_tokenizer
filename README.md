@@ -16,13 +16,14 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **Batch Processing** - Sequential and parallel (Isolate-based) batch encoding
 - **Streaming API** - HuggingFace TextStreamer compatible for real-time LLM output
 - **HuggingFace Compatible** - JSON serialization, dynamic token addition, tokenize() API
-- **Well Tested** - 274 tests with 100% pass rate
+- **HuggingFace tokenizer.json** - Load tokenizers directly from HuggingFace `tokenizer.json` format
+- **Well Tested** - 274+ tests with 100% pass rate
 
 ## Installation
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.3.0
+  dart_sentencepiece_tokenizer: ^1.3.1
 ```
 
 ## Quick Start
@@ -242,6 +243,42 @@ final loadedSync = TokenizerJsonLoader.fromJsonFileSync('tokenizer.json');
 final fromString = TokenizerJsonLoader.fromJsonString(jsonString);
 ```
 
+### HuggingFace tokenizer.json Loading (v1.3.1+)
+
+Load tokenizers directly from HuggingFace `tokenizer.json` format, enabling compatibility with models like Gemma and Llama that distribute tokenizers in this format.
+
+```dart
+// Auto-detection via TokenizerJsonLoader (recommended)
+final tokenizer = await TokenizerJsonLoader.fromJsonFile('tokenizer.json');
+
+// Or use HuggingFaceTokenizerLoader directly
+final tokenizer = await HuggingFaceTokenizerLoader.fromJsonFile(
+  'tokenizer.json',
+);
+
+// From JSON string
+final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(jsonString);
+
+// With custom config override
+final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(
+  jsonString,
+  config: SentencePieceConfig.gemma,
+);
+
+// Check format before loading
+final data = jsonDecode(jsonString) as Map<String, dynamic>;
+if (TokenizerJsonLoader.isHuggingFaceFormat(data)) {
+  final tokenizer = HuggingFaceTokenizerLoader.fromMap(data);
+}
+```
+
+**Supported features:**
+- Unigram and BPE model types
+- Special token detection (unk, bos, eos, pad)
+- Normalizer and post-processor inference
+- Byte fallback from decoder configuration
+- Added tokens beyond base vocabulary
+
 ### Decoding
 
 ```dart
@@ -403,9 +440,19 @@ final customTokenizer = SentencePieceTokenizer.fromModelFileSync(
 
 | Method | Description |
 |--------|-------------|
-| `fromJsonString(json)` | Load from JSON string |
-| `fromJsonFile(path)` | Load from JSON file (async) |
-| `fromJsonFileSync(path)` | Load from JSON file (sync) |
+| `fromJsonString(json)` | Load from JSON string (auto-detects format) |
+| `fromJsonFile(path)` | Load from JSON file (async, auto-detects format) |
+| `fromJsonFileSync(path)` | Load from JSON file (sync, auto-detects format) |
+| `isHuggingFaceFormat(data)` | Check if JSON map is HuggingFace format |
+
+### HuggingFaceTokenizerLoader
+
+| Method | Description |
+|--------|-------------|
+| `fromJsonString(json)` | Load from HuggingFace JSON string |
+| `fromMap(data)` | Load from pre-parsed JSON map |
+| `fromJsonFile(path)` | Load from file (async) |
+| `fromJsonFileSync(path)` | Load from file (sync) |
 
 ### Encoding
 
@@ -450,7 +497,9 @@ Download SentencePiece models from HuggingFace:
 - [Llama 2](https://huggingface.co/meta-llama/Llama-2-7b-hf/resolve/main/tokenizer.model)
 - [Gemma](https://huggingface.co/google/gemma-7b/resolve/main/tokenizer.model)
 
-Format: Binary protobuf (.model files from SentencePiece C++ library).
+**Supported formats:**
+- Binary protobuf (`.model` files from SentencePiece C++ library)
+- HuggingFace `tokenizer.json` (auto-detected, v1.3.1+)
 
 ## Testing
 
