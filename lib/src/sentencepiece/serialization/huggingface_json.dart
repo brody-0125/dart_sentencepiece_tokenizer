@@ -4,6 +4,12 @@ import 'dart:io';
 import '../model/model_proto.dart';
 import '../sentencepiece_tokenizer.dart';
 
+/// Known variant strings for each special token type.
+const _unkTokenVariants = {'<unk>', '[UNK]'};
+const _bosTokenVariants = {'<s>', '<bos>', '[BOS]'};
+const _eosTokenVariants = {'</s>', '<eos>', '[EOS]'};
+const _padTokenVariants = {'<pad>', '[PAD]'};
+
 /// Metadata extracted from HuggingFace tokenizer.json sections
 /// (added_tokens, normalizer, decoder, post_processor).
 class _HfMetadata {
@@ -22,6 +28,7 @@ class _HfMetadata {
   final bool addBosToken;
   final bool addEosToken;
   final List<_HfAddedToken> addedTokens;
+  final Set<String> specialContents;
 
   const _HfMetadata({
     this.addDummyPrefix = true,
@@ -39,6 +46,7 @@ class _HfMetadata {
     this.addBosToken = false,
     this.addEosToken = false,
     this.addedTokens = const [],
+    this.specialContents = const {},
   });
 }
 
@@ -75,31 +83,6 @@ class HuggingFaceTokenizerLoader {
     Map<String, dynamic> data, {
     SentencePieceConfig? config,
   }) {
-    return _fromJsonMap(data, config);
-  }
-
-  /// Load tokenizer from HuggingFace tokenizer.json file asynchronously.
-  static Future<SentencePieceTokenizer> fromJsonFile(
-    String path, {
-    SentencePieceConfig? config,
-  }) async {
-    final json = await File(path).readAsString();
-    return fromJsonString(json, config: config);
-  }
-
-  /// Load tokenizer from HuggingFace tokenizer.json file synchronously.
-  static SentencePieceTokenizer fromJsonFileSync(
-    String path, {
-    SentencePieceConfig? config,
-  }) {
-    final json = File(path).readAsStringSync();
-    return fromJsonString(json, config: config);
-  }
-
-  static SentencePieceTokenizer _fromJsonMap(
-    Map<String, dynamic> data,
-    SentencePieceConfig? config,
-  ) {
     final modelData = data['model'] as Map<String, dynamic>?;
     if (modelData == null) {
       throw const FormatException(
@@ -144,10 +127,27 @@ class HuggingFaceTokenizerLoader {
       config: finalConfig,
     );
 
-    // Add tokens that are in added_tokens but not in the base vocabulary.
     _applyAddedTokens(tokenizer, meta, model.vocabSize);
 
     return tokenizer;
+  }
+
+  /// Load tokenizer from HuggingFace tokenizer.json file asynchronously.
+  static Future<SentencePieceTokenizer> fromJsonFile(
+    String path, {
+    SentencePieceConfig? config,
+  }) async {
+    final json = await File(path).readAsString();
+    return fromJsonString(json, config: config);
+  }
+
+  /// Load tokenizer from HuggingFace tokenizer.json file synchronously.
+  static SentencePieceTokenizer fromJsonFileSync(
+    String path, {
+    SentencePieceConfig? config,
+  }) {
+    final json = File(path).readAsStringSync();
+    return fromJsonString(json, config: config);
   }
 
   static SentencePieceModel _parseUnigramModel(
@@ -163,14 +163,6 @@ class HuggingFaceTokenizerLoader {
 
     final unkId = modelData['unk_id'] as int? ?? meta.unkId;
 
-    // Build set of special token contents for type detection.
-    final specialContents = <String>{};
-    for (final token in meta.addedTokens) {
-      if (token.special) {
-        specialContents.add(token.content);
-      }
-    }
-
     final pieces = <SentencePiece>[];
     for (var i = 0; i < rawVocab.length; i++) {
       final entry = rawVocab[i] as List;
@@ -180,7 +172,7 @@ class HuggingFaceTokenizerLoader {
       PieceType type;
       if (i == unkId) {
         type = PieceType.unknown;
-      } else if (specialContents.contains(piece)) {
+      } else if (meta.specialContents.contains(piece)) {
         type = PieceType.control;
       } else if (_isByteToken(piece)) {
         type = PieceType.byte;
@@ -193,25 +185,10 @@ class HuggingFaceTokenizerLoader {
 
     return SentencePieceModel(
       pieces: pieces,
-      trainerSpec: TrainerSpec(
-        modelType: ModelType.unigram,
-        vocabSize: pieces.length,
-        unkId: unkId,
-        bosId: meta.bosId,
-        eosId: meta.eosId,
-        padId: meta.padId,
-        unkPiece: meta.unkPiece,
-        bosPiece: meta.bosPiece,
-        eosPiece: meta.eosPiece,
-        padPiece: meta.padPiece,
-        byteFallback: meta.byteFallback,
+      trainerSpec: _buildTrainerSpec(
+        ModelType.unigram, meta, pieces.length, unkId, meta.byteFallback,
       ),
-      normalizerSpec: NormalizerSpec(
-        name: 'identity',
-        addDummyPrefix: meta.addDummyPrefix,
-        removeExtraWhitespaces: meta.removeExtraWhitespaces,
-        escapeWhitespaces: meta.escapeWhitespaces,
-      ),
+      normalizerSpec: _buildNormalizerSpec(meta),
     );
   }
 
@@ -229,7 +206,6 @@ class HuggingFaceTokenizerLoader {
     final rawMerges = modelData['merges'] as List? ?? [];
     final byteFallback = modelData['byte_fallback'] as bool? ?? meta.byteFallback;
 
-    // Build merge result -> merge index map.
     final mergeScores = <String, double>{};
     for (var i = 0; i < rawMerges.length; i++) {
       final mergeStr = rawMerges[i] as String;
@@ -237,24 +213,12 @@ class HuggingFaceTokenizerLoader {
       if (spaceIdx < 0) continue;
       final left = mergeStr.substring(0, spaceIdx);
       final right = mergeStr.substring(spaceIdx + 1);
-      final merged = left + right;
-      mergeScores[merged] = -i.toDouble();
+      mergeScores[left + right] = -i.toDouble();
     }
 
     final baseScore = -(rawMerges.length + 1).toDouble();
-
-    // Build set of special token contents for type detection.
-    final specialContents = <String>{};
-    for (final token in meta.addedTokens) {
-      if (token.special) {
-        specialContents.add(token.content);
-      }
-    }
-
-    // Find unk token.
     final unkToken = modelData['unk_token'] as String? ?? meta.unkPiece;
 
-    // Allocate pieces list indexed by ID.
     final vocabSize = rawVocab.length;
     final pieces = List<SentencePiece>.filled(
       vocabSize,
@@ -270,7 +234,7 @@ class HuggingFaceTokenizerLoader {
       PieceType type;
       if (piece == unkToken) {
         type = PieceType.unknown;
-      } else if (specialContents.contains(piece)) {
+      } else if (meta.specialContents.contains(piece)) {
         type = PieceType.control;
       } else if (_isByteToken(piece)) {
         type = PieceType.byte;
@@ -281,44 +245,56 @@ class HuggingFaceTokenizerLoader {
       double score;
       if (type == PieceType.unknown || type == PieceType.control) {
         score = 0.0;
-      } else if (mergeScores.containsKey(piece)) {
-        score = mergeScores[piece]!;
       } else {
-        score = baseScore;
+        score = mergeScores[piece] ?? baseScore;
       }
 
       pieces[id] = SentencePiece(piece: piece, score: score, type: type);
     }
 
-    // Determine unk ID from vocab.
     final unkId = rawVocab[unkToken] as int? ?? meta.unkId;
 
     return SentencePieceModel(
       pieces: pieces,
-      trainerSpec: TrainerSpec(
-        modelType: ModelType.bpe,
-        vocabSize: vocabSize,
-        unkId: unkId,
-        bosId: meta.bosId,
-        eosId: meta.eosId,
-        padId: meta.padId,
-        unkPiece: meta.unkPiece,
-        bosPiece: meta.bosPiece,
-        eosPiece: meta.eosPiece,
-        padPiece: meta.padPiece,
-        byteFallback: byteFallback,
+      trainerSpec: _buildTrainerSpec(
+        ModelType.bpe, meta, vocabSize, unkId, byteFallback,
       ),
-      normalizerSpec: NormalizerSpec(
-        name: 'identity',
-        addDummyPrefix: meta.addDummyPrefix,
-        removeExtraWhitespaces: meta.removeExtraWhitespaces,
-        escapeWhitespaces: meta.escapeWhitespaces,
-      ),
+      normalizerSpec: _buildNormalizerSpec(meta),
+    );
+  }
+
+  static TrainerSpec _buildTrainerSpec(
+    ModelType modelType,
+    _HfMetadata meta,
+    int vocabSize,
+    int unkId,
+    bool byteFallback,
+  ) {
+    return TrainerSpec(
+      modelType: modelType,
+      vocabSize: vocabSize,
+      unkId: unkId,
+      bosId: meta.bosId,
+      eosId: meta.eosId,
+      padId: meta.padId,
+      unkPiece: meta.unkPiece,
+      bosPiece: meta.bosPiece,
+      eosPiece: meta.eosPiece,
+      padPiece: meta.padPiece,
+      byteFallback: byteFallback,
+    );
+  }
+
+  static NormalizerSpec _buildNormalizerSpec(_HfMetadata meta) {
+    return NormalizerSpec(
+      name: 'identity',
+      addDummyPrefix: meta.addDummyPrefix,
+      removeExtraWhitespaces: meta.removeExtraWhitespaces,
+      escapeWhitespaces: meta.escapeWhitespaces,
     );
   }
 
   static _HfMetadata _parseMetadata(Map<String, dynamic> data) {
-    // Parse added_tokens.
     final addedTokens = <_HfAddedToken>[];
     final rawAddedTokens = data['added_tokens'] as List?;
     if (rawAddedTokens != null) {
@@ -342,19 +318,21 @@ class HuggingFaceTokenizerLoader {
     String eosPiece = '</s>';
     String padPiece = '<pad>';
 
+    final specialContents = <String>{};
     for (final token in addedTokens) {
       if (!token.special) continue;
+      specialContents.add(token.content);
       final c = token.content;
-      if (c == '<unk>' || c == '[UNK]') {
+      if (_unkTokenVariants.contains(c)) {
         unkId = token.id;
         unkPiece = c;
-      } else if (c == '<s>' || c == '<bos>' || c == '[BOS]') {
+      } else if (_bosTokenVariants.contains(c)) {
         bosId = token.id;
         bosPiece = c;
-      } else if (c == '</s>' || c == '<eos>' || c == '[EOS]') {
+      } else if (_eosTokenVariants.contains(c)) {
         eosId = token.id;
         eosPiece = c;
-      } else if (c == '<pad>' || c == '[PAD]') {
+      } else if (_padTokenVariants.contains(c)) {
         padId = token.id;
         padPiece = c;
       }
@@ -373,14 +351,12 @@ class HuggingFaceTokenizerLoader {
       removeExtraWhitespaces = parsed.removeExtraWhitespaces;
     }
 
-    // Parse decoder for byte_fallback.
     bool byteFallback = false;
     final decoderData = data['decoder'] as Map<String, dynamic>?;
     if (decoderData != null) {
       byteFallback = _hasDecoderByteFallback(decoderData);
     }
 
-    // Parse post_processor for BOS/EOS config.
     bool addBosToken = false;
     bool addEosToken = false;
     final postProcessor = data['post_processor'] as Map<String, dynamic>?;
@@ -406,6 +382,7 @@ class HuggingFaceTokenizerLoader {
       addBosToken: addBosToken,
       addEosToken: addEosToken,
       addedTokens: addedTokens,
+      specialContents: specialContents,
     );
   }
 
@@ -470,14 +447,12 @@ class HuggingFaceTokenizerLoader {
 
     final single = data['single'] as List?;
     if (single != null && single.isNotEmpty) {
-      // Check first element for BOS.
       final first = single.first as Map<String, dynamic>;
       if (first.containsKey('SpecialToken')) {
         final st = first['SpecialToken'] as Map<String, dynamic>;
         final id = st['id'] as String?;
         if (id == bosPiece) addBos = true;
       }
-      // Check last element for EOS.
       final last = single.last as Map<String, dynamic>;
       if (last.containsKey('SpecialToken')) {
         final st = last['SpecialToken'] as Map<String, dynamic>;
@@ -496,7 +471,6 @@ class HuggingFaceTokenizerLoader {
   ) {
     final normalTokens = <String>[];
     for (final token in meta.addedTokens) {
-      // Skip tokens already in the base vocabulary.
       if (token.id < baseVocabSize && tokenizer.vocab.contains(token.content)) {
         continue;
       }

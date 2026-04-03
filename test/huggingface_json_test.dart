@@ -3,10 +3,32 @@ import 'dart:convert';
 import 'package:test/test.dart';
 import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
 
-/// Helper to build a minimal HF Unigram tokenizer.json map.
-Map<String, dynamic> _buildHfUnigramJson({
-  List<List<dynamic>>? vocab,
-  int unkId = 0,
+const _defaultAddedTokens = [
+  {'id': 0, 'content': '<unk>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
+  {'id': 1, 'content': '<s>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
+  {'id': 2, 'content': '</s>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
+];
+
+const _defaultNormalizer = {
+  'type': 'Sequence',
+  'normalizers': [
+    {'type': 'Prepend', 'prepend': '\u2581'},
+    {'type': 'Replace', 'pattern': {'Regex': ' '}, 'content': '\u2581'},
+  ],
+};
+
+const _defaultDecoder = {
+  'type': 'Sequence',
+  'decoders': [
+    {'type': 'Replace', 'pattern': {'String': '\u2581'}, 'content': ' '},
+    {'type': 'ByteFallback'},
+    {'type': 'Strip', 'content': ' ', 'start': 1, 'stop': 0},
+  ],
+};
+
+/// Helper to build a minimal HF tokenizer.json map with shared defaults.
+Map<String, dynamic> _buildHfJson({
+  required Map<String, dynamic> model,
   List<Map<String, dynamic>>? addedTokens,
   Map<String, dynamic>? normalizer,
   Map<String, dynamic>? decoder,
@@ -16,32 +38,29 @@ Map<String, dynamic> _buildHfUnigramJson({
     'version': '1.0',
     'truncation': null,
     'padding': null,
-    'added_tokens': addedTokens ??
-        [
-          {'id': 0, 'content': '<unk>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
-          {'id': 1, 'content': '<s>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
-          {'id': 2, 'content': '</s>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
-        ],
-    'normalizer': normalizer ??
-        {
-          'type': 'Sequence',
-          'normalizers': [
-            {'type': 'Prepend', 'prepend': '\u2581'},
-            {'type': 'Replace', 'pattern': {'Regex': ' '}, 'content': '\u2581'},
-          ],
-        },
+    'added_tokens': addedTokens ?? _defaultAddedTokens,
+    'normalizer': normalizer ?? _defaultNormalizer,
     'pre_tokenizer': null,
     'post_processor': postProcessor,
-    'decoder': decoder ??
-        {
-          'type': 'Sequence',
-          'decoders': [
-            {'type': 'Replace', 'pattern': {'String': '\u2581'}, 'content': ' '},
-            {'type': 'ByteFallback'},
-            {'type': 'Strip', 'content': ' ', 'start': 1, 'stop': 0},
-          ],
-        },
-    'model': {
+    'decoder': decoder ?? _defaultDecoder,
+    'model': model,
+  };
+}
+
+Map<String, dynamic> _buildHfUnigramJson({
+  List<List<dynamic>>? vocab,
+  int unkId = 0,
+  List<Map<String, dynamic>>? addedTokens,
+  Map<String, dynamic>? normalizer,
+  Map<String, dynamic>? decoder,
+  Map<String, dynamic>? postProcessor,
+}) {
+  return _buildHfJson(
+    addedTokens: addedTokens,
+    normalizer: normalizer,
+    decoder: decoder,
+    postProcessor: postProcessor,
+    model: {
       'type': 'Unigram',
       'unk_id': unkId,
       'vocab': vocab ??
@@ -66,10 +85,9 @@ Map<String, dynamic> _buildHfUnigramJson({
             ['<0x02>', -100.0],
           ],
     },
-  };
+  );
 }
 
-/// Helper to build a minimal HF BPE tokenizer.json map.
 Map<String, dynamic> _buildHfBpeJson({
   Map<String, int>? vocab,
   List<String>? merges,
@@ -79,36 +97,12 @@ Map<String, dynamic> _buildHfBpeJson({
   Map<String, dynamic>? decoder,
   Map<String, dynamic>? postProcessor,
 }) {
-  return {
-    'version': '1.0',
-    'truncation': null,
-    'padding': null,
-    'added_tokens': addedTokens ??
-        [
-          {'id': 0, 'content': '<unk>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
-          {'id': 1, 'content': '<s>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
-          {'id': 2, 'content': '</s>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
-        ],
-    'normalizer': normalizer ??
-        {
-          'type': 'Sequence',
-          'normalizers': [
-            {'type': 'Prepend', 'prepend': '\u2581'},
-            {'type': 'Replace', 'pattern': {'Regex': ' '}, 'content': '\u2581'},
-          ],
-        },
-    'pre_tokenizer': null,
-    'post_processor': postProcessor,
-    'decoder': decoder ??
-        {
-          'type': 'Sequence',
-          'decoders': [
-            {'type': 'Replace', 'pattern': {'String': '\u2581'}, 'content': ' '},
-            {'type': 'ByteFallback'},
-            {'type': 'Strip', 'content': ' ', 'start': 1, 'stop': 0},
-          ],
-        },
-    'model': {
+  return _buildHfJson(
+    addedTokens: addedTokens,
+    normalizer: normalizer,
+    decoder: decoder,
+    postProcessor: postProcessor,
+    model: {
       'type': 'BPE',
       'dropout': null,
       'unk_token': '<unk>',
@@ -141,7 +135,7 @@ Map<String, dynamic> _buildHfBpeJson({
             '\u2581 Hello',
           ],
     },
-  };
+  );
 }
 
 void main() {
