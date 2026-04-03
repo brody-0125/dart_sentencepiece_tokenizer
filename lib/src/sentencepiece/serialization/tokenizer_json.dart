@@ -3,6 +3,7 @@ import 'dart:io';
 
 import '../model/model_proto.dart';
 import '../sentencepiece_tokenizer.dart';
+import 'huggingface_json.dart';
 
 /// JSON schema version for tokenizer serialization.
 const String kTokenizerJsonVersion = '1.0';
@@ -69,8 +70,17 @@ extension SentencePieceTokenizerJson on SentencePieceTokenizer {
 }
 
 /// JSON deserialization for SentencePieceTokenizer.
+///
+/// Supports both the library's own JSON format and HuggingFace
+/// `tokenizer.json` format (auto-detected).
 class TokenizerJsonLoader {
   TokenizerJsonLoader._();
+
+  /// Check if a parsed JSON map is in HuggingFace tokenizer.json format.
+  static bool isHuggingFaceFormat(Map<String, dynamic> data) {
+    final model = data['model'];
+    return model is Map<String, dynamic> && model.containsKey('type');
+  }
 
   /// Create tokenizer from JSON string.
   static SentencePieceTokenizer fromJsonString(
@@ -103,6 +113,11 @@ class TokenizerJsonLoader {
     Map<String, dynamic> data,
     SentencePieceConfig? config,
   ) {
+    // Auto-detect HuggingFace format.
+    if (isHuggingFaceFormat(data)) {
+      return HuggingFaceTokenizerLoader.fromMap(data, config: config);
+    }
+
     // Validate version
     final version = data['version'] as String?;
     if (version == null) {

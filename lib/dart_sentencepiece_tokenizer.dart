@@ -15,6 +15,8 @@ export 'src/sentencepiece/sentencepiece_tokenizer.dart'
         SpTruncationConfig,
         SpTruncationDirection,
         ModelType;
+export 'src/sentencepiece/serialization/huggingface_json.dart'
+    show HuggingFaceTokenizerLoader;
 export 'src/sentencepiece/serialization/tokenizer_json.dart'
     show
         SentencePieceTokenizerJson,
