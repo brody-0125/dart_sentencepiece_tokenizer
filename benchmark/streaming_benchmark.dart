@@ -16,9 +16,7 @@ void main() async {
   if (modelPath != null) {
     print('Loading model from: $modelPath');
     tokenizer = SentencePieceTokenizer.fromModelFileSync(modelPath);
-    print(
-      'Model loaded: ${tokenizer.vocabSize} tokens',
-    );
+    print('Model loaded: ${tokenizer.vocabSize} tokens');
   } else {
     print('No model file found. Using minimal test model.');
     tokenizer = _createMinimalTokenizer();
@@ -107,11 +105,11 @@ Future<void> _runTextStreamerBenchmark(SentencePieceTokenizer tokenizer) async {
     ('Short (10 tokens)', _generateTokens(tokenizer, 'hello world test', 10)),
     (
       'Medium (100 tokens)',
-      _generateTokens(tokenizer, 'hello world test sentence', 100)
+      _generateTokens(tokenizer, 'hello world test sentence', 100),
     ),
     (
       'Long (500 tokens)',
-      _generateTokens(tokenizer, 'hello world test sentence is', 500)
+      _generateTokens(tokenizer, 'hello world test sentence is', 500),
     ),
   ];
 
@@ -150,12 +148,17 @@ Future<void> _runTextStreamerBenchmark(SentencePieceTokenizer tokenizer) async {
 }
 
 Future<void> _runDecodeVsStreamingBenchmark(
-    SentencePieceTokenizer tokenizer) async {
+  SentencePieceTokenizer tokenizer,
+) async {
   print('-' * 70);
   print('2. BATCH decode() vs STREAMING decode');
   print('-' * 70);
 
-  final tokens = _generateTokens(tokenizer, 'hello world test sentence is', 100);
+  final tokens = _generateTokens(
+    tokenizer,
+    'hello world test sentence is',
+    100,
+  );
 
   // Warmup
   for (var i = 0; i < 10; i++) {
@@ -215,7 +218,8 @@ Future<void> _runDecodeVsStreamingBenchmark(
 }
 
 Future<void> _runCallbackOverheadBenchmark(
-    SentencePieceTokenizer tokenizer) async {
+  SentencePieceTokenizer tokenizer,
+) async {
   print('-' * 70);
   print('3. CALLBACK OVERHEAD');
   print('-' * 70);
@@ -275,7 +279,8 @@ Future<void> _runCallbackOverheadBenchmark(
 }
 
 Future<void> _runWordBoundaryHeuristicsBenchmark(
-    SentencePieceTokenizer tokenizer) async {
+  SentencePieceTokenizer tokenizer,
+) async {
   print('-' * 70);
   print('4. WORD BOUNDARY HEURISTICS');
   print('-' * 70);
@@ -300,7 +305,8 @@ Future<void> _runWordBoundaryHeuristicsBenchmark(
     streamer.end();
 
     print(
-        '  $name: ${encoding.length} tokens -> $emissionCount emissions (${(emissionCount / encoding.length * 100).toStringAsFixed(0)}% ratio)');
+      '  $name: ${encoding.length} tokens -> $emissionCount emissions (${(emissionCount / encoding.length * 100).toStringAsFixed(0)}% ratio)',
+    );
   }
   print('');
 }
@@ -333,7 +339,10 @@ Future<void> _runMemoryBenchmark(SentencePieceTokenizer tokenizer) async {
 
 /// Generate a token sequence by repeating encoding of given text.
 List<int> _generateTokens(
-    SentencePieceTokenizer tokenizer, String text, int targetLength) {
+  SentencePieceTokenizer tokenizer,
+  String text,
+  int targetLength,
+) {
   final encoding = tokenizer.encode(text, addSpecialTokens: false);
   final tokens = <int>[];
   while (tokens.length < targetLength) {

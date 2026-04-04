@@ -41,12 +41,12 @@ class SpVocabulary {
     required this.bosPiece,
     required this.eosPiece,
     required this.padPiece,
-  })  : _pieceToId = pieceToId,
-        _idToPiece = idToPiece,
-        _scores = scores,
-        _types = types,
-        _trie = trie,
-        _byteToId = byteToId;
+  }) : _pieceToId = pieceToId,
+       _idToPiece = idToPiece,
+       _scores = scores,
+       _types = types,
+       _trie = trie,
+       _byteToId = byteToId;
 
   factory SpVocabulary.fromModel(SentencePieceModel model) {
     final pieces = model.pieces;

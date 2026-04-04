@@ -22,6 +22,7 @@ jobs:
         with:
           sdk: stable
       - run: dart pub get
+      - run: dart format --set-exit-if-changed .
       - run: dart analyze --fatal-infos
 
   test:

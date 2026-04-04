@@ -276,7 +276,6 @@ void main() {
     });
   });
 
-
   group('SentencePieceTokenizer streaming methods', () {
     test('decodeStream yields text chunks', () async {
       final encoding = tokenizer.encode('hello world');

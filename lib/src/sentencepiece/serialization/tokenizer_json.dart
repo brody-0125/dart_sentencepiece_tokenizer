@@ -66,7 +66,6 @@ extension SentencePieceTokenizerJson on SentencePieceTokenizer {
       'byte_fallback': vocab.hasByteFallback,
     };
   }
-
 }
 
 /// JSON deserialization for SentencePieceTokenizer.
@@ -167,7 +166,10 @@ class TokenizerJsonLoader {
     final bosData = specialTokens['bos'] as Map<String, dynamic>?;
     final eosData = specialTokens['eos'] as Map<String, dynamic>?;
     final padData = specialTokens['pad'] as Map<String, dynamic>?;
-    if (unkData == null || bosData == null || eosData == null || padData == null) {
+    if (unkData == null ||
+        bosData == null ||
+        eosData == null ||
+        padData == null) {
       throw const FormatException(
         'Missing special token entries (unk, bos, eos, pad) in tokenizer JSON',
       );
@@ -176,8 +178,10 @@ class TokenizerJsonLoader {
     // Parse normalizer settings
     final normalizerData = data['normalizer'] as Map<String, dynamic>;
     final addDummyPrefix = normalizerData['add_dummy_prefix'] as bool? ?? true;
-    final removeExtraWhitespaces = normalizerData['remove_extra_whitespaces'] as bool? ?? true;
-    final escapeWhitespaces = normalizerData['escape_whitespaces'] as bool? ?? true;
+    final removeExtraWhitespaces =
+        normalizerData['remove_extra_whitespaces'] as bool? ?? true;
+    final escapeWhitespaces =
+        normalizerData['escape_whitespaces'] as bool? ?? true;
 
     // Parse byte fallback
     final byteFallback = data['byte_fallback'] as bool? ?? false;
@@ -201,11 +205,13 @@ class TokenizerJsonLoader {
     // Build model pieces
     final modelPieces = <SentencePiece>[];
     for (var i = 0; i < pieces.length; i++) {
-      modelPieces.add(SentencePiece(
-        piece: pieces[i],
-        score: scores[i],
-        type: PieceType.fromValue(types[i]),
-      ));
+      modelPieces.add(
+        SentencePiece(
+          piece: pieces[i],
+          score: scores[i],
+          type: PieceType.fromValue(types[i]),
+        ),
+      );
     }
 
     // Create model

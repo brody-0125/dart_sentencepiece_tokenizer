@@ -33,7 +33,9 @@ class SpNormalizer {
     }
 
     // Step 2: Add dummy prefix (space at beginning)
-    if (addDummyPrefix && result.isNotEmpty && !_isWhitespace(result.codeUnitAt(0))) {
+    if (addDummyPrefix &&
+        result.isNotEmpty &&
+        !_isWhitespace(result.codeUnitAt(0))) {
       result = ' $result';
     }
 
@@ -105,7 +107,8 @@ class SpNormalizer {
   }
 
   @override
-  String toString() => 'SpNormalizer('
+  String toString() =>
+      'SpNormalizer('
       'addDummyPrefix: $addDummyPrefix, '
       'removeExtraWhitespaces: $removeExtraWhitespaces, '
       'escapeWhitespaces: $escapeWhitespaces)';

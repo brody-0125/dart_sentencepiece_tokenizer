@@ -40,7 +40,10 @@ void main() {
     test('batch encoding produces consistent results', () {
       const texts = ['Hello world', 'Goodbye world'];
 
-      final batchResults = tokenizer.encodeBatch(texts, addSpecialTokens: false);
+      final batchResults = tokenizer.encodeBatch(
+        texts,
+        addSpecialTokens: false,
+      );
       final individualResults = [
         for (final text in texts)
           tokenizer.encode(text, addSpecialTokens: false),
@@ -80,7 +83,10 @@ void main() {
 
       expect(padded.length, equals(10));
       // Original tokens should be at the beginning
-      expect(padded.tokens.sublist(0, encoding.length), equals(encoding.tokens));
+      expect(
+        padded.tokens.sublist(0, encoding.length),
+        equals(encoding.tokens),
+      );
       // Attention mask should be 0 for padding
       expect(
         padded.attentionMask.sublist(encoding.length),
@@ -125,10 +131,7 @@ void main() {
         'This is a longer sentence',
         addSpecialTokens: false,
       );
-      final padded = encoding.withPadding(
-        targetLength: 3,
-        padTokenId: 0,
-      );
+      final padded = encoding.withPadding(targetLength: 3, padTokenId: 0);
 
       expect(padded.length, equals(encoding.length));
     });
@@ -167,10 +170,7 @@ void main() {
 
     test('no padding when already multiple', () {
       final encoding = tokenizer.encode('hello', addSpecialTokens: false);
-      final prePadded = encoding.withPadding(
-        targetLength: 8,
-        padTokenId: 0,
-      );
+      final prePadded = encoding.withPadding(targetLength: 8, padTokenId: 0);
 
       final result = prePadded.withPaddingToMultipleOf(
         multiple: 8,
@@ -298,10 +298,7 @@ void main() {
 
       // Llama config has addBosToken=true, addEosToken=false
       // Count depends on whether model has valid BOS ID
-      expect(
-        llamaTokenizer.numSpecialTokensToAdd(),
-        greaterThanOrEqualTo(0),
-      );
+      expect(llamaTokenizer.numSpecialTokensToAdd(), greaterThanOrEqualTo(0));
 
       final gemmaTokenizer = SentencePieceTokenizer.fromBytes(
         getTestModelBytes(),
@@ -310,10 +307,7 @@ void main() {
 
       // Gemma config has addBosToken=true, addEosToken=true
       // Count depends on whether model has valid BOS/EOS IDs
-      expect(
-        gemmaTokenizer.numSpecialTokensToAdd(),
-        greaterThanOrEqualTo(0),
-      );
+      expect(gemmaTokenizer.numSpecialTokensToAdd(), greaterThanOrEqualTo(0));
     });
   });
 
@@ -419,9 +413,7 @@ void main() {
     });
 
     test('parallel batch matches sequential', () async {
-      final texts = [
-        for (var i = 0; i < 20; i++) 'Test sentence number $i',
-      ];
+      final texts = [for (var i = 0; i < 20; i++) 'Test sentence number $i'];
 
       final sequential = tokenizer.encodeBatch(texts, addSpecialTokens: false);
       final parallel = await tokenizer.encodeBatchParallel(
@@ -468,9 +460,9 @@ void main() {
     test('batch decode', () {
       final texts = ['hello', 'world'];
       final batch = tokenizer.encodeBatch(texts, addSpecialTokens: false);
-      final decoded = tokenizer.decodeBatch(
-        [for (final e in batch) e.ids.toList()],
-      );
+      final decoded = tokenizer.decodeBatch([
+        for (final e in batch) e.ids.toList(),
+      ]);
 
       expect(decoded, equals(['hello', 'world']));
     });
@@ -782,7 +774,10 @@ void main() {
       expect(restored.vocabSize, equals(tokenizer.vocabSize));
 
       // Encoding with custom token should work
-      final encoding = restored.encode('<custom> test', addSpecialTokens: false);
+      final encoding = restored.encode(
+        '<custom> test',
+        addSpecialTokens: false,
+      );
       expect(encoding.tokens, contains('<custom>'));
     });
   });

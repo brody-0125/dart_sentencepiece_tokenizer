@@ -70,10 +70,7 @@ void main() {
         sequenceIds: [0, 0],
       );
 
-      final padded = encoding.withPadding(
-        targetLength: 5,
-        padTokenId: 99,
-      );
+      final padded = encoding.withPadding(targetLength: 5, padTokenId: 99);
 
       expect(padded.length, 5);
       expect(padded.ids[0], 1);
@@ -126,10 +123,7 @@ void main() {
         wordIds: [0, 1],
       );
 
-      final padded = encoding.withPadding(
-        targetLength: 2,
-        padTokenId: 99,
-      );
+      final padded = encoding.withPadding(targetLength: 2, padTokenId: 99);
       expect(identical(padded, encoding), isTrue);
     });
   });

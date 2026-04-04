@@ -225,7 +225,10 @@ void main() {
 
       expect(tokenizer.truncation, isNotNull);
       expect(tokenizer.truncation!.maxLength, equals(512));
-      expect(tokenizer.truncation!.direction, equals(SpTruncationDirection.left));
+      expect(
+        tokenizer.truncation!.direction,
+        equals(SpTruncationDirection.left),
+      );
     });
 
     test('truncation respects maxLength', () {
@@ -273,9 +276,7 @@ void main() {
     });
 
     test('encodeBatchParallel matches sequential', () async {
-      final texts = [
-        for (var i = 0; i < 20; i++) 'test sentence number $i',
-      ];
+      final texts = [for (var i = 0; i < 20; i++) 'test sentence number $i'];
 
       final sequential = tokenizer.encodeBatch(texts, addSpecialTokens: false);
       final parallel = await tokenizer.encodeBatchParallel(
@@ -285,10 +286,7 @@ void main() {
 
       expect(parallel.length, equals(sequential.length));
       for (var i = 0; i < texts.length; i++) {
-        expect(
-          parallel[i].ids.toList(),
-          equals(sequential[i].ids.toList()),
-        );
+        expect(parallel[i].ids.toList(), equals(sequential[i].ids.toList()));
       }
     });
   });
@@ -307,7 +305,10 @@ void main() {
     test('decode with skipSpecialTokens=true', () {
       final tokenizer = createLlamaTokenizer();
       final encoding = tokenizer.encode('hello');
-      final decoded = tokenizer.decode(encoding.ids.toList(), skipSpecialTokens: true);
+      final decoded = tokenizer.decode(
+        encoding.ids.toList(),
+        skipSpecialTokens: true,
+      );
 
       // Should not contain BOS token text
       expect(decoded, isNot(contains('<s>')));
@@ -318,23 +319,30 @@ void main() {
       final encoding = tokenizer.encode('hello');
 
       // Verify BOS was added to encoding
-      if (tokenizer.vocab.bosId >= 0 && encoding.ids.contains(tokenizer.vocab.bosId)) {
-        final decoded = tokenizer.decode(encoding.ids.toList(), skipSpecialTokens: false);
+      if (tokenizer.vocab.bosId >= 0 &&
+          encoding.ids.contains(tokenizer.vocab.bosId)) {
+        final decoded = tokenizer.decode(
+          encoding.ids.toList(),
+          skipSpecialTokens: false,
+        );
         // When BOS is in encoding and we don't skip special tokens,
         // the decoded string should contain the BOS piece
         expect(decoded, contains(tokenizer.vocab.bosPiece));
       } else {
         // If BOS is not in the encoding, just verify decode works
-        final decoded = tokenizer.decode(encoding.ids.toList(), skipSpecialTokens: false);
+        final decoded = tokenizer.decode(
+          encoding.ids.toList(),
+          skipSpecialTokens: false,
+        );
         expect(decoded, isNotEmpty);
       }
     });
 
     test('decodeBatch handles multiple sequences', () {
-      final encodings = tokenizer.encodeBatch(
-        ['hello', 'world'],
-        addSpecialTokens: false,
-      );
+      final encodings = tokenizer.encodeBatch([
+        'hello',
+        'world',
+      ], addSpecialTokens: false);
       final decoded = tokenizer.decodeBatch([
         encodings[0].ids.toList(),
         encodings[1].ids.toList(),
@@ -378,7 +386,10 @@ void main() {
     });
 
     test('emoji', () {
-      final encoding = tokenizer.encode('Hello 😊 World 🌍', addSpecialTokens: false);
+      final encoding = tokenizer.encode(
+        'Hello 😊 World 🌍',
+        addSpecialTokens: false,
+      );
       expect(encoding.length, greaterThan(0));
     });
 
@@ -420,7 +431,10 @@ void main() {
     });
 
     test('null bytes and control characters', () {
-      final encoding = tokenizer.encode('\x00\x01\x02', addSpecialTokens: false);
+      final encoding = tokenizer.encode(
+        '\x00\x01\x02',
+        addSpecialTokens: false,
+      );
       expect(encoding, isNotNull);
     });
   });
@@ -434,10 +448,7 @@ void main() {
 
     test('withPadding creates new encoding', () {
       final encoding = tokenizer.encode('hello', addSpecialTokens: false);
-      final padded = encoding.withPadding(
-        targetLength: 10,
-        padTokenId: 0,
-      );
+      final padded = encoding.withPadding(targetLength: 10, padTokenId: 0);
 
       expect(padded, isNot(same(encoding)));
       expect(padded.length, equals(10));
@@ -731,10 +742,7 @@ void main() {
     });
 
     test('encodePairBatch preserves order', () {
-      final pairs = [
-        ('hello', 'world'),
-        ('test', 'sentence'),
-      ];
+      final pairs = [('hello', 'world'), ('test', 'sentence')];
 
       final encodings = tokenizer.encodePairBatch(
         pairs,
@@ -765,10 +773,7 @@ void main() {
     });
 
     test('encodePairBatch handles empty list', () {
-      final encodings = tokenizer.encodePairBatch(
-        [],
-        addSpecialTokens: false,
-      );
+      final encodings = tokenizer.encodePairBatch([], addSpecialTokens: false);
 
       expect(encodings, isEmpty);
     });
@@ -791,7 +796,10 @@ void main() {
       final noSpecialTokenizer = createTestTokenizer();
 
       // Default config has no special tokens
-      expect(noSpecialTokenizer.numSpecialTokensToAdd(isPair: false), equals(0));
+      expect(
+        noSpecialTokenizer.numSpecialTokensToAdd(isPair: false),
+        equals(0),
+      );
       expect(noSpecialTokenizer.numSpecialTokensToAdd(isPair: true), equals(0));
     });
 
@@ -855,7 +863,8 @@ void main() {
       final encoding = tokenizer.encode('hello');
 
       // First token (BOS) should be marked as special
-      if (tokenizer.vocab.bosId >= 0 && encoding.ids.contains(tokenizer.vocab.bosId)) {
+      if (tokenizer.vocab.bosId >= 0 &&
+          encoding.ids.contains(tokenizer.vocab.bosId)) {
         final bosIndex = encoding.ids.toList().indexOf(tokenizer.vocab.bosId);
         expect(encoding.specialTokensMask[bosIndex], equals(1));
       }
@@ -879,7 +888,10 @@ void main() {
       final truncated = encoding.withTruncation(maxLength: 3);
 
       // Decode
-      final decoded = tokenizer.decode(truncated.ids.toList(), skipSpecialTokens: true);
+      final decoded = tokenizer.decode(
+        truncated.ids.toList(),
+        skipSpecialTokens: true,
+      );
 
       expect(truncated.length, equals(3));
       expect(decoded.isNotEmpty, isTrue);
@@ -909,7 +921,10 @@ void main() {
     test('batch encoding consistency', () {
       final texts = ['hello', 'world', 'test'];
 
-      final batchEncodings = tokenizer.encodeBatch(texts, addSpecialTokens: false);
+      final batchEncodings = tokenizer.encodeBatch(
+        texts,
+        addSpecialTokens: false,
+      );
       final singleEncodings = texts
           .map((t) => tokenizer.encode(t, addSpecialTokens: false))
           .toList();

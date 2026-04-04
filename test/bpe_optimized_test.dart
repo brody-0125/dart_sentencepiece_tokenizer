@@ -138,10 +138,7 @@ void main() {
       print('  Optimized: ${swOptimized.elapsedMicroseconds / 10}μs/call');
 
       // Results should match
-      expect(
-        optimizedBpe.tokenize(text),
-        equals(originalBpe.tokenize(text)),
-      );
+      expect(optimizedBpe.tokenize(text), equals(originalBpe.tokenize(text)));
     });
 
     test('optimized handles repeated patterns', () {

@@ -75,11 +75,11 @@ class TextStreamer implements BaseStreamer {
     bool skipPrompt = false,
     int promptLength = 1,
     this.onFinalizedText,
-  })  : _tokenizer = tokenizer,
-        _skipSpecialTokens = skipSpecialTokens,
-        _skipPrompt = skipPrompt,
-        _promptLength = promptLength,
-        _promptTokensRemaining = skipPrompt ? promptLength : 0;
+  }) : _tokenizer = tokenizer,
+       _skipSpecialTokens = skipSpecialTokens,
+       _skipPrompt = skipPrompt,
+       _promptLength = promptLength,
+       _promptTokensRemaining = skipPrompt ? promptLength : 0;
 
   @override
   void put(int tokenId) {
@@ -113,7 +113,9 @@ class TextStreamer implements BaseStreamer {
         _tokenCache,
         skipSpecialTokens: _skipSpecialTokens,
       );
-      final remaining = _printLen < text.length ? text.substring(_printLen) : '';
+      final remaining = _printLen < text.length
+          ? text.substring(_printLen)
+          : '';
       if (remaining.isNotEmpty) {
         _emitText(remaining, streamEnd: true);
       } else {

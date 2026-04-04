@@ -24,10 +24,7 @@ void main() {
     });
 
     test('missing vocab throws FormatException', () {
-      final json = jsonEncode({
-        'version': '1.0',
-        'model_type': 'unigram',
-      });
+      final json = jsonEncode({'version': '1.0', 'model_type': 'unigram'});
 
       expect(
         () => TokenizerJsonLoader.fromJsonString(json),
@@ -39,7 +36,9 @@ void main() {
       final json = jsonEncode({
         'version': '1.0',
         'model_type': 'unigram',
-        'vocab': {'pieces': ['a']},
+        'vocab': {
+          'pieces': ['a'],
+        },
       });
 
       expect(
