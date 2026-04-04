@@ -179,12 +179,11 @@ Future<void> _runRoundTripTests(
     final normalizedDecoded = decoded.toLowerCase().trim();
 
     if (normalizedDecoded.contains(normalizedOriginal.substring(0, 5))) {
-      results.pass('Round-trip: "${text.substring(0, 20.clamp(0, text.length))}..."');
-    } else {
-      results.fail(
-        'Round-trip: "$text"',
-        'Decoded to "$decoded"',
+      results.pass(
+        'Round-trip: "${text.substring(0, 20.clamp(0, text.length))}..."',
       );
+    } else {
+      results.fail('Round-trip: "$text"', 'Decoded to "$decoded"');
     }
   }
   print('');
@@ -238,7 +237,9 @@ Future<void> _runPerformanceTest(
   if (tokensPerSec >= 500000) {
     results.pass('Throughput >= 500K tokens/sec');
   } else if (tokensPerSec >= 100000) {
-    results.info('Throughput ${_formatNumber(tokensPerSec.round())} (acceptable)');
+    results.info(
+      'Throughput ${_formatNumber(tokensPerSec.round())} (acceptable)',
+    );
     results.passed++;
   } else {
     results.fail(
@@ -302,20 +303,14 @@ class SingleEncodingTestCase {
   final String name;
   final String input;
 
-  const SingleEncodingTestCase({
-    required this.name,
-    required this.input,
-  });
+  const SingleEncodingTestCase({required this.name, required this.input});
 }
 
 class EdgeCaseTestCase {
   final String name;
   final String input;
 
-  const EdgeCaseTestCase({
-    required this.name,
-    required this.input,
-  });
+  const EdgeCaseTestCase({required this.name, required this.input});
 }
 
 const _singleEncodingTestCases = [
@@ -343,7 +338,10 @@ const _singleEncodingTestCases = [
   SingleEncodingTestCase(name: 'Mixed punctuation', input: 'Hello... World!'),
 
   // LLM related text
-  SingleEncodingTestCase(name: 'LLM prompt', input: 'What is machine learning?'),
+  SingleEncodingTestCase(
+    name: 'LLM prompt',
+    input: 'What is machine learning?',
+  ),
   SingleEncodingTestCase(
     name: 'AI sentence',
     input: 'Artificial intelligence is transforming the world.',

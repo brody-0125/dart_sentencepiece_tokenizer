@@ -117,9 +117,7 @@ class UnigramAlgorithm implements TokenizationAlgorithm {
 
     final codeUnit = text.codeUnitAt(start);
     // Check for high surrogate
-    if (codeUnit >= 0xD800 &&
-        codeUnit <= 0xDBFF &&
-        start + 1 < text.length) {
+    if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF && start + 1 < text.length) {
       final low = text.codeUnitAt(start + 1);
       // Check for low surrogate
       if (low >= 0xDC00 && low <= 0xDFFF) {
@@ -183,9 +181,7 @@ class UnigramAlgorithm implements TokenizationAlgorithm {
 
       if (matches.isNotEmpty) {
         // Use the longest match
-        final best = matches.reduce(
-          (a, b) => a.end > b.end ? a : b,
-        );
+        final best = matches.reduce((a, b) => a.end > b.end ? a : b);
         tokens.add(best.tokenId);
         i = best.end;
       } else if (byteFallback && vocab.hasByteFallback) {

@@ -70,7 +70,8 @@ class ProtobufReader {
       throw StateError('Unexpected end of data while reading fixed32');
     }
 
-    final value = _data[_position] |
+    final value =
+        _data[_position] |
         (_data[_position + 1] << 8) |
         (_data[_position + 2] << 16) |
         (_data[_position + 3] << 24);
@@ -116,7 +117,8 @@ class ProtobufReader {
     final length = readVarint();
     if (_position + length > _data.length) {
       throw StateError(
-          'Unexpected end of data while reading bytes (need $length, have ${_data.length - _position})');
+        'Unexpected end of data while reading bytes (need $length, have ${_data.length - _position})',
+      );
     }
 
     final bytes = Uint8List.sublistView(_data, _position, _position + length);

@@ -143,24 +143,24 @@ void main() {
     late SpVocabulary vocab;
 
     setUp(() {
-      final model = SentencePieceModel(
+      const model = SentencePieceModel(
         pieces: [
-          const SentencePiece(piece: '<unk>', score: 0, type: PieceType.unknown),
-          const SentencePiece(piece: '<s>', score: 0, type: PieceType.control),
-          const SentencePiece(piece: '</s>', score: 0, type: PieceType.control),
-          const SentencePiece(piece: '▁hello', score: -1.0, type: PieceType.normal),
-          const SentencePiece(piece: '▁world', score: -1.5, type: PieceType.normal),
-          const SentencePiece(piece: '▁', score: -2.0, type: PieceType.normal),
-          const SentencePiece(piece: 'hello', score: -3.0, type: PieceType.normal),
+          SentencePiece(piece: '<unk>', score: 0, type: PieceType.unknown),
+          SentencePiece(piece: '<s>', score: 0, type: PieceType.control),
+          SentencePiece(piece: '</s>', score: 0, type: PieceType.control),
+          SentencePiece(piece: '▁hello', score: -1.0, type: PieceType.normal),
+          SentencePiece(piece: '▁world', score: -1.5, type: PieceType.normal),
+          SentencePiece(piece: '▁', score: -2.0, type: PieceType.normal),
+          SentencePiece(piece: 'hello', score: -3.0, type: PieceType.normal),
         ],
-        trainerSpec: const TrainerSpec(
+        trainerSpec: TrainerSpec(
           modelType: ModelType.unigram,
           unkId: 0,
           bosId: 1,
           eosId: 2,
           padId: -1,
         ),
-        normalizerSpec: const NormalizerSpec(),
+        normalizerSpec: NormalizerSpec(),
       );
       vocab = SpVocabulary.fromModel(model);
     });
@@ -215,17 +215,17 @@ void main() {
     late BpeAlgorithm algorithm;
 
     setUp(() {
-      final model = SentencePieceModel(
+      const model = SentencePieceModel(
         pieces: [
-          const SentencePiece(piece: '<unk>', score: 0, type: PieceType.unknown),
-          const SentencePiece(piece: 'a', score: -1.0, type: PieceType.normal),
-          const SentencePiece(piece: 'b', score: -1.0, type: PieceType.normal),
-          const SentencePiece(piece: 'ab', score: -0.5, type: PieceType.normal),
-          const SentencePiece(piece: 'abc', score: -0.3, type: PieceType.normal),
-          const SentencePiece(piece: 'c', score: -1.0, type: PieceType.normal),
+          SentencePiece(piece: '<unk>', score: 0, type: PieceType.unknown),
+          SentencePiece(piece: 'a', score: -1.0, type: PieceType.normal),
+          SentencePiece(piece: 'b', score: -1.0, type: PieceType.normal),
+          SentencePiece(piece: 'ab', score: -0.5, type: PieceType.normal),
+          SentencePiece(piece: 'abc', score: -0.3, type: PieceType.normal),
+          SentencePiece(piece: 'c', score: -1.0, type: PieceType.normal),
         ],
-        trainerSpec: const TrainerSpec(modelType: ModelType.bpe),
-        normalizerSpec: const NormalizerSpec(),
+        trainerSpec: TrainerSpec(modelType: ModelType.bpe),
+        normalizerSpec: NormalizerSpec(),
       );
       vocab = SpVocabulary.fromModel(model);
       algorithm = BpeAlgorithm(vocab: vocab);
@@ -258,17 +258,17 @@ void main() {
     late UnigramAlgorithm algorithm;
 
     setUp(() {
-      final model = SentencePieceModel(
+      const model = SentencePieceModel(
         pieces: [
-          const SentencePiece(piece: '<unk>', score: -100, type: PieceType.unknown),
-          const SentencePiece(piece: 'a', score: -1.0, type: PieceType.normal),
-          const SentencePiece(piece: 'b', score: -1.0, type: PieceType.normal),
-          const SentencePiece(piece: 'ab', score: -0.5, type: PieceType.normal),
-          const SentencePiece(piece: 'abc', score: -0.3, type: PieceType.normal),
-          const SentencePiece(piece: 'c', score: -1.0, type: PieceType.normal),
+          SentencePiece(piece: '<unk>', score: -100, type: PieceType.unknown),
+          SentencePiece(piece: 'a', score: -1.0, type: PieceType.normal),
+          SentencePiece(piece: 'b', score: -1.0, type: PieceType.normal),
+          SentencePiece(piece: 'ab', score: -0.5, type: PieceType.normal),
+          SentencePiece(piece: 'abc', score: -0.3, type: PieceType.normal),
+          SentencePiece(piece: 'c', score: -1.0, type: PieceType.normal),
         ],
-        trainerSpec: const TrainerSpec(modelType: ModelType.unigram),
-        normalizerSpec: const NormalizerSpec(),
+        trainerSpec: TrainerSpec(modelType: ModelType.unigram),
+        normalizerSpec: NormalizerSpec(),
       );
       vocab = SpVocabulary.fromModel(model);
       algorithm = UnigramAlgorithm(vocab: vocab);
@@ -396,20 +396,14 @@ void main() {
     test('encode throws for too long input', () {
       final longText = 'a' * 600000;
 
-      expect(
-        () => tokenizer.encode(longText),
-        throwsArgumentError,
-      );
+      expect(() => tokenizer.encode(longText), throwsArgumentError);
     });
 
     test('encode accepts input at max length', () {
       // Should not throw for exactly 500000 chars
       final text = 'a' * 500000;
 
-      expect(
-        () => tokenizer.encode(text),
-        returnsNormally,
-      );
+      expect(() => tokenizer.encode(text), returnsNormally);
     });
 
     test('encodePair throws for too long first text', () {

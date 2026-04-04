@@ -43,7 +43,10 @@ void main() {
       final originalEncoding = tokenizer.encode(text, addSpecialTokens: false);
       final restoredEncoding = restored.encode(text, addSpecialTokens: false);
 
-      expect(restoredEncoding.ids.toList(), equals(originalEncoding.ids.toList()));
+      expect(
+        restoredEncoding.ids.toList(),
+        equals(originalEncoding.ids.toList()),
+      );
       expect(restoredEncoding.tokens, equals(originalEncoding.tokens));
     });
 
@@ -90,7 +93,9 @@ void main() {
     });
 
     test('saveToJson and fromJsonFile work async', () async {
-      final tempFile = File('${Directory.systemTemp.path}/test_tokenizer_async.json');
+      final tempFile = File(
+        '${Directory.systemTemp.path}/test_tokenizer_async.json',
+      );
       try {
         await tokenizer.saveToJson(tempFile.path);
         expect(tempFile.existsSync(), isTrue);
@@ -142,20 +147,24 @@ void main() {
     test('added tokens are recognized during encoding', () {
       tokenizer.addTokens(['<CUSTOM>']);
 
-      final encoding = tokenizer.encode('test <CUSTOM> text', addSpecialTokens: false);
+      final encoding = tokenizer.encode(
+        'test <CUSTOM> text',
+        addSpecialTokens: false,
+      );
 
       expect(encoding.tokens, contains('<CUSTOM>'));
     });
 
     test('addSpecialTokens adds special tokens', () {
       final originalSize = tokenizer.vocabSize;
-      final added = tokenizer.addSpecialTokens({
-        'mask_token': '<mask>',
-      });
+      final added = tokenizer.addSpecialTokens({'mask_token': '<mask>'});
 
       expect(added, equals(1));
       expect(tokenizer.vocabSize, equals(originalSize + 1));
-      expect(tokenizer.vocab.isSpecialToken(tokenizer.vocab.pieceToId('<mask>')), isTrue);
+      expect(
+        tokenizer.vocab.isSpecialToken(tokenizer.vocab.pieceToId('<mask>')),
+        isTrue,
+      );
     });
 
     test('addSpecialTokens updates pad_token reference', () {
@@ -232,10 +241,7 @@ void main() {
     test('tokenize throws for too long input', () {
       final longText = 'a' * 600000;
 
-      expect(
-        () => tokenizer.tokenize(longText),
-        throwsArgumentError,
-      );
+      expect(() => tokenizer.tokenize(longText), throwsArgumentError);
     });
 
     test('tokenizeBatch processes multiple texts', () {
@@ -292,7 +298,10 @@ void main() {
       expect(restored.vocabSize, equals(tokenizer.vocabSize));
 
       // Verify tokens work
-      final encoding = restored.encode('test <custom1>', addSpecialTokens: false);
+      final encoding = restored.encode(
+        'test <custom1>',
+        addSpecialTokens: false,
+      );
       expect(encoding.tokens, contains('<custom1>'));
     });
   });

@@ -156,9 +156,7 @@ class HuggingFaceTokenizerLoader {
   ) {
     final rawVocab = modelData['vocab'] as List?;
     if (rawVocab == null) {
-      throw const FormatException(
-        'Missing vocab in HuggingFace Unigram model',
-      );
+      throw const FormatException('Missing vocab in HuggingFace Unigram model');
     }
 
     final unkId = modelData['unk_id'] as int? ?? meta.unkId;
@@ -186,7 +184,11 @@ class HuggingFaceTokenizerLoader {
     return SentencePieceModel(
       pieces: pieces,
       trainerSpec: _buildTrainerSpec(
-        ModelType.unigram, meta, pieces.length, unkId, meta.byteFallback,
+        ModelType.unigram,
+        meta,
+        pieces.length,
+        unkId,
+        meta.byteFallback,
       ),
       normalizerSpec: _buildNormalizerSpec(meta),
     );
@@ -198,13 +200,12 @@ class HuggingFaceTokenizerLoader {
   ) {
     final rawVocab = modelData['vocab'] as Map<String, dynamic>?;
     if (rawVocab == null) {
-      throw const FormatException(
-        'Missing vocab in HuggingFace BPE model',
-      );
+      throw const FormatException('Missing vocab in HuggingFace BPE model');
     }
 
     final rawMerges = modelData['merges'] as List? ?? [];
-    final byteFallback = modelData['byte_fallback'] as bool? ?? meta.byteFallback;
+    final byteFallback =
+        modelData['byte_fallback'] as bool? ?? meta.byteFallback;
 
     final mergeScores = <String, double>{};
     for (var i = 0; i < rawMerges.length; i++) {
@@ -257,7 +258,11 @@ class HuggingFaceTokenizerLoader {
     return SentencePieceModel(
       pieces: pieces,
       trainerSpec: _buildTrainerSpec(
-        ModelType.bpe, meta, vocabSize, unkId, byteFallback,
+        ModelType.bpe,
+        meta,
+        vocabSize,
+        unkId,
+        byteFallback,
       ),
       normalizerSpec: _buildNormalizerSpec(meta),
     );
@@ -300,11 +305,13 @@ class HuggingFaceTokenizerLoader {
     if (rawAddedTokens != null) {
       for (final raw in rawAddedTokens) {
         final entry = raw as Map<String, dynamic>;
-        addedTokens.add(_HfAddedToken(
-          id: entry['id'] as int,
-          content: entry['content'] as String,
-          special: entry['special'] as bool? ?? false,
-        ));
+        addedTokens.add(
+          _HfAddedToken(
+            id: entry['id'] as int,
+            content: entry['content'] as String,
+            special: entry['special'] as bool? ?? false,
+          ),
+        );
       }
     }
 
@@ -386,8 +393,12 @@ class HuggingFaceTokenizerLoader {
     );
   }
 
-  static ({bool addDummyPrefix, bool escapeWhitespaces, bool removeExtraWhitespaces})
-      _parseNormalizerFlags(Map<String, dynamic> data) {
+  static ({
+    bool addDummyPrefix,
+    bool escapeWhitespaces,
+    bool removeExtraWhitespaces,
+  })
+  _parseNormalizerFlags(Map<String, dynamic> data) {
     bool addDummyPrefix = false;
     bool escapeWhitespaces = false;
     bool removeExtraWhitespaces = false;
@@ -486,8 +497,6 @@ class HuggingFaceTokenizerLoader {
   }
 
   static bool _isByteToken(String piece) {
-    return piece.length == 6 &&
-        piece.startsWith('<0x') &&
-        piece.endsWith('>');
+    return piece.length == 6 && piece.startsWith('<0x') && piece.endsWith('>');
   }
 }

@@ -18,10 +18,7 @@ export 'src/sentencepiece/sentencepiece_tokenizer.dart'
 export 'src/sentencepiece/serialization/huggingface_json.dart'
     show HuggingFaceTokenizerLoader;
 export 'src/sentencepiece/serialization/tokenizer_json.dart'
-    show
-        SentencePieceTokenizerJson,
-        TokenizerJsonLoader,
-        kTokenizerJsonVersion;
+    show SentencePieceTokenizerJson, TokenizerJsonLoader, kTokenizerJsonVersion;
 export 'src/sentencepiece/streaming/base_streamer.dart' show BaseStreamer;
 export 'src/sentencepiece/streaming/text_streamer.dart'
     show TextStreamer, OnFinalizedText;

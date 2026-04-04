@@ -120,7 +120,7 @@ Future<void> _runSingleEncodingBenchmark(
       'Machine learning is a subset of artificial intelligence that enables '
           'systems to learn and improve from experience without being '
           'explicitly programmed. Deep learning, a subset of machine learning, '
-          'uses neural networks with many layers.'
+          'uses neural networks with many layers.',
     ),
   ];
 
@@ -169,7 +169,9 @@ Future<void> _runBatchEncodingBenchmark(
     sw.stop();
 
     final totalTokens = results.fold<int>(0, (sum, e) => sum + e.length);
-    final tokensPerMs = (totalTokens / sw.elapsedMilliseconds).toStringAsFixed(0);
+    final tokensPerMs = (totalTokens / sw.elapsedMilliseconds).toStringAsFixed(
+      0,
+    );
     print(
       '  Batch $batchSize: ${sw.elapsedMilliseconds}ms ($tokensPerMs tokens/ms)',
     );
@@ -213,7 +215,7 @@ Future<void> _runParallelBenchmark(SentencePieceTokenizer tokenizer) async {
 
     final speedup = swPar.elapsedMilliseconds > 0
         ? (swSeq.elapsedMilliseconds / swPar.elapsedMilliseconds)
-            .toStringAsFixed(2)
+              .toStringAsFixed(2)
         : 'N/A';
     final seqMs = swSeq.elapsedMilliseconds;
     final parMs = swPar.elapsedMilliseconds;
@@ -316,7 +318,8 @@ Future<void> _runMemoryBenchmark(SentencePieceTokenizer tokenizer) async {
   print('');
 
   // Verify typed array types
-  final isOptimized = encoding.ids is Int32List &&
+  final isOptimized =
+      encoding.ids is Int32List &&
       encoding.typeIds is Uint8List &&
       encoding.attentionMask is Uint8List &&
       encoding.specialTokensMask is Uint8List;
@@ -385,7 +388,8 @@ Future<void> _runJsonSerializationBenchmark(
     tokenizer.toJson();
   }
   sw.stop();
-  final toJsonAvgMs = (sw.elapsedMicroseconds / iterations / 1000).toStringAsFixed(2);
+  final toJsonAvgMs = (sw.elapsedMicroseconds / iterations / 1000)
+      .toStringAsFixed(2);
   print('  toJson():           ${toJsonAvgMs}ms/call');
 
   // Get JSON once for fromJsonString benchmark
@@ -399,7 +403,8 @@ Future<void> _runJsonSerializationBenchmark(
     TokenizerJsonLoader.fromJsonString(json);
   }
   sw.stop();
-  final fromJsonAvgMs = (sw.elapsedMicroseconds / iterations / 1000).toStringAsFixed(2);
+  final fromJsonAvgMs = (sw.elapsedMicroseconds / iterations / 1000)
+      .toStringAsFixed(2);
   print('  fromJsonString():   ${fromJsonAvgMs}ms/call');
 
   // Verify round-trip correctness
@@ -430,7 +435,9 @@ Future<void> _runTokenAdditionBenchmark() async {
   print('  Vocab size before:  $originalSize');
   print('  Vocab size after:   ${tokenizer.vocabSize}');
   print('  Time to add 100:    ${sw.elapsedMicroseconds}μs');
-  print('  Per token:          ${(sw.elapsedMicroseconds / added).toStringAsFixed(1)}μs/token');
+  print(
+    '  Per token:          ${(sw.elapsedMicroseconds / added).toStringAsFixed(1)}μs/token',
+  );
 
   // Verify encoding works with added tokens
   final encoding = tokenizer.encode('<token_0> test', addSpecialTokens: false);
@@ -443,7 +450,9 @@ Future<void> _runTokenAdditionBenchmark() async {
     tokenizer.getAddedVocab();
   }
   sw2.stop();
-  print('  getAddedVocab():    ${(sw2.elapsedMicroseconds / 1000).toStringAsFixed(2)}μs/call');
+  print(
+    '  getAddedVocab():    ${(sw2.elapsedMicroseconds / 1000).toStringAsFixed(2)}μs/call',
+  );
   print('');
 }
 
@@ -459,7 +468,7 @@ Future<void> _runTokenizeBenchmark(SentencePieceTokenizer tokenizer) async {
       'Long',
       'Machine learning is a subset of artificial intelligence that enables '
           'systems to learn and improve from experience without being '
-          'explicitly programmed. Deep learning uses neural networks.'
+          'explicitly programmed. Deep learning uses neural networks.',
     ),
   ];
 

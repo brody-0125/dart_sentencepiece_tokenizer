@@ -1,4 +1,6 @@
 /// Test utilities for SentencePiece tokenizer tests.
+library;
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -9,11 +11,7 @@ import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
 const testModelPath = 'test/fixtures/test.model';
 
 /// Alternative model paths to search.
-const alternativeModelPaths = [
-  'test.model',
-  'tokenizer.model',
-  'model.model',
-];
+const alternativeModelPaths = ['test.model', 'tokenizer.model', 'model.model'];
 
 /// Cache for test model bytes.
 Uint8List? _cachedModelBytes;
@@ -122,10 +120,7 @@ Uint8List _createMinimalTestModel() {
 SentencePieceTokenizer createTestTokenizer({
   SentencePieceConfig config = const SentencePieceConfig(),
 }) {
-  return SentencePieceTokenizer.fromBytes(
-    getTestModelBytes(),
-    config: config,
-  );
+  return SentencePieceTokenizer.fromBytes(getTestModelBytes(), config: config);
 }
 
 /// Create a test tokenizer with Llama configuration.

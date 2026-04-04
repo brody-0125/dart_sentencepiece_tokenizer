@@ -4,23 +4,55 @@ import 'package:test/test.dart';
 import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
 
 const _defaultAddedTokens = [
-  {'id': 0, 'content': '<unk>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
-  {'id': 1, 'content': '<s>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
-  {'id': 2, 'content': '</s>', 'single_word': false, 'lstrip': false, 'rstrip': false, 'normalized': false, 'special': true},
+  {
+    'id': 0,
+    'content': '<unk>',
+    'single_word': false,
+    'lstrip': false,
+    'rstrip': false,
+    'normalized': false,
+    'special': true,
+  },
+  {
+    'id': 1,
+    'content': '<s>',
+    'single_word': false,
+    'lstrip': false,
+    'rstrip': false,
+    'normalized': false,
+    'special': true,
+  },
+  {
+    'id': 2,
+    'content': '</s>',
+    'single_word': false,
+    'lstrip': false,
+    'rstrip': false,
+    'normalized': false,
+    'special': true,
+  },
 ];
 
 const _defaultNormalizer = {
   'type': 'Sequence',
   'normalizers': [
     {'type': 'Prepend', 'prepend': '\u2581'},
-    {'type': 'Replace', 'pattern': {'Regex': ' '}, 'content': '\u2581'},
+    {
+      'type': 'Replace',
+      'pattern': {'Regex': ' '},
+      'content': '\u2581',
+    },
   ],
 };
 
 const _defaultDecoder = {
   'type': 'Sequence',
   'decoders': [
-    {'type': 'Replace', 'pattern': {'String': '\u2581'}, 'content': ' '},
+    {
+      'type': 'Replace',
+      'pattern': {'String': '\u2581'},
+      'content': ' ',
+    },
     {'type': 'ByteFallback'},
     {'type': 'Strip', 'content': ' ', 'start': 1, 'stop': 0},
   ],
@@ -63,7 +95,8 @@ Map<String, dynamic> _buildHfUnigramJson({
     model: {
       'type': 'Unigram',
       'unk_id': unkId,
-      'vocab': vocab ??
+      'vocab':
+          vocab ??
           [
             ['<unk>', 0.0],
             ['<s>', 0.0],
@@ -110,7 +143,8 @@ Map<String, dynamic> _buildHfBpeJson({
       'end_of_word_suffix': null,
       'fuse_unk': false,
       'byte_fallback': byteFallback,
-      'vocab': vocab ??
+      'vocab':
+          vocab ??
           {
             '<unk>': 0,
             '<s>': 1,
@@ -126,14 +160,7 @@ Map<String, dynamic> _buildHfBpeJson({
             'Hello': 11,
             '\u2581Hello': 12,
           },
-      'merges': merges ??
-          [
-            'H e',
-            'l l',
-            'He ll',
-            'Hell o',
-            '\u2581 Hello',
-          ],
+      'merges': merges ?? ['H e', 'l l', 'He ll', 'Hell o', '\u2581 Hello'],
     },
   );
 }
@@ -187,14 +214,20 @@ void main() {
       });
 
       test('no byte_fallback when decoder has no ByteFallback', () {
-        final json = jsonEncode(_buildHfUnigramJson(
-          decoder: {
-            'type': 'Sequence',
-            'decoders': [
-              {'type': 'Replace', 'pattern': {'String': '\u2581'}, 'content': ' '},
-            ],
-          },
-        ));
+        final json = jsonEncode(
+          _buildHfUnigramJson(
+            decoder: {
+              'type': 'Sequence',
+              'decoders': [
+                {
+                  'type': 'Replace',
+                  'pattern': {'String': '\u2581'},
+                  'content': ' ',
+                },
+              ],
+            },
+          ),
+        );
         final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(json);
 
         expect(tokenizer.vocab.hasByteFallback, isFalse);
@@ -268,16 +301,12 @@ void main() {
       });
 
       test('handles empty merges list', () {
-        final json = jsonEncode(_buildHfBpeJson(
-          vocab: {
-            '<unk>': 0,
-            '<s>': 1,
-            '</s>': 2,
-            'a': 3,
-            'b': 4,
-          },
-          merges: [],
-        ));
+        final json = jsonEncode(
+          _buildHfBpeJson(
+            vocab: {'<unk>': 0, '<s>': 1, '</s>': 2, 'a': 3, 'b': 4},
+            merges: [],
+          ),
+        );
         final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(json);
 
         expect(tokenizer.vocab.size, 5);
@@ -287,25 +316,26 @@ void main() {
 
     group('normalizer inference', () {
       test('detects addDummyPrefix from Prepend normalizer', () {
-        final json = jsonEncode(_buildHfUnigramJson(
-          normalizer: {
-            'type': 'Prepend',
-            'prepend': '\u2581',
-          },
-        ));
+        final json = jsonEncode(
+          _buildHfUnigramJson(
+            normalizer: {'type': 'Prepend', 'prepend': '\u2581'},
+          ),
+        );
         final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(json);
 
         expect(tokenizer.normalizer.addDummyPrefix, isTrue);
       });
 
       test('detects escapeWhitespaces from Replace normalizer', () {
-        final json = jsonEncode(_buildHfUnigramJson(
-          normalizer: {
-            'type': 'Replace',
-            'pattern': {'Regex': ' '},
-            'content': '\u2581',
-          },
-        ));
+        final json = jsonEncode(
+          _buildHfUnigramJson(
+            normalizer: {
+              'type': 'Replace',
+              'pattern': {'Regex': ' '},
+              'content': '\u2581',
+            },
+          ),
+        );
         final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(json);
 
         expect(tokenizer.normalizer.escapeWhitespaces, isTrue);
@@ -326,17 +356,23 @@ void main() {
 
     group('post_processor config inference', () {
       test('detects addBosToken from TemplateProcessing', () {
-        final json = jsonEncode(_buildHfUnigramJson(
-          postProcessor: {
-            'type': 'TemplateProcessing',
-            'single': [
-              {'SpecialToken': {'id': '<s>', 'type_id': 0}},
-              {'Sequence': {'id': 'A', 'type_id': 0}},
-            ],
-            'pair': [],
-            'special_tokens': {},
-          },
-        ));
+        final json = jsonEncode(
+          _buildHfUnigramJson(
+            postProcessor: {
+              'type': 'TemplateProcessing',
+              'single': [
+                {
+                  'SpecialToken': {'id': '<s>', 'type_id': 0},
+                },
+                {
+                  'Sequence': {'id': 'A', 'type_id': 0},
+                },
+              ],
+              'pair': [],
+              'special_tokens': {},
+            },
+          ),
+        );
         final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(json);
 
         expect(tokenizer.config.addBosToken, isTrue);
@@ -344,18 +380,26 @@ void main() {
       });
 
       test('detects addBosToken and addEosToken', () {
-        final json = jsonEncode(_buildHfUnigramJson(
-          postProcessor: {
-            'type': 'TemplateProcessing',
-            'single': [
-              {'SpecialToken': {'id': '<s>', 'type_id': 0}},
-              {'Sequence': {'id': 'A', 'type_id': 0}},
-              {'SpecialToken': {'id': '</s>', 'type_id': 0}},
-            ],
-            'pair': [],
-            'special_tokens': {},
-          },
-        ));
+        final json = jsonEncode(
+          _buildHfUnigramJson(
+            postProcessor: {
+              'type': 'TemplateProcessing',
+              'single': [
+                {
+                  'SpecialToken': {'id': '<s>', 'type_id': 0},
+                },
+                {
+                  'Sequence': {'id': 'A', 'type_id': 0},
+                },
+                {
+                  'SpecialToken': {'id': '</s>', 'type_id': 0},
+                },
+              ],
+              'pair': [],
+              'special_tokens': {},
+            },
+          ),
+        );
         final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(json);
 
         expect(tokenizer.config.addBosToken, isTrue);
@@ -375,14 +419,16 @@ void main() {
 
     group('added_tokens handling', () {
       test('extra added_tokens beyond base vocab are added', () {
-        final json = jsonEncode(_buildHfUnigramJson(
-          addedTokens: [
-            {'id': 0, 'content': '<unk>', 'special': true},
-            {'id': 1, 'content': '<s>', 'special': true},
-            {'id': 2, 'content': '</s>', 'special': true},
-            {'id': 99999, 'content': '<mask>', 'special': true},
-          ],
-        ));
+        final json = jsonEncode(
+          _buildHfUnigramJson(
+            addedTokens: [
+              {'id': 0, 'content': '<unk>', 'special': true},
+              {'id': 1, 'content': '<s>', 'special': true},
+              {'id': 2, 'content': '</s>', 'special': true},
+              {'id': 99999, 'content': '<mask>', 'special': true},
+            ],
+          ),
+        );
         final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(json);
 
         // <mask> should be added as a special token.
@@ -431,10 +477,7 @@ void main() {
 
     group('error handling', () {
       test('missing model section throws FormatException', () {
-        final json = jsonEncode({
-          'version': '1.0',
-          'added_tokens': [],
-        });
+        final json = jsonEncode({'version': '1.0', 'added_tokens': []});
 
         expect(
           () => HuggingFaceTokenizerLoader.fromJsonString(json),

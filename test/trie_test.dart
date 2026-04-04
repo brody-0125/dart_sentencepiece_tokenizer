@@ -36,21 +36,23 @@ void main() {
       expect(matches[1].token, '𝄞x');
     });
 
-    test('findLongestPrefix and findAllPrefixes produce consistent results',
-        () {
-      final trie = Trie();
-      trie.insert('h', 0);
-      trie.insert('he', 1);
-      trie.insert('hel', 2);
-      trie.insert('hello', 3);
+    test(
+      'findLongestPrefix and findAllPrefixes produce consistent results',
+      () {
+        final trie = Trie();
+        trie.insert('h', 0);
+        trie.insert('he', 1);
+        trie.insert('hel', 2);
+        trie.insert('hello', 3);
 
-      final longest = trie.findLongestPrefix('hello world');
-      final all = trie.findAllPrefixes('hello world');
+        final longest = trie.findLongestPrefix('hello world');
+        final all = trie.findAllPrefixes('hello world');
 
-      expect(longest, isNotNull);
-      expect(longest!.token, 'hello');
-      expect(all.last.token, 'hello');
-      expect(all, hasLength(4));
-    });
+        expect(longest, isNotNull);
+        expect(longest!.token, 'hello');
+        expect(all.last.token, 'hello');
+        expect(all, hasLength(4));
+      },
+    );
   });
 }

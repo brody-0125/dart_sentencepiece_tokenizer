@@ -96,8 +96,8 @@ class SentencePieceTokenizer {
     required SpNormalizer normalizer,
     required TokenizationAlgorithm algorithm,
     required this.modelType,
-  })  : _normalizer = normalizer,
-        _algorithm = algorithm;
+  }) : _normalizer = normalizer,
+       _algorithm = algorithm;
 
   /// Load tokenizer from a .model file asynchronously.
   static Future<SentencePieceTokenizer> fromModelFile(
@@ -359,7 +359,9 @@ class SentencePieceTokenizer {
       if (_paddingConfig!.length != null) {
         targetLength = _paddingConfig!.length!;
       } else {
-        targetLength = results.map((e) => e.length).reduce((a, b) => a > b ? a : b);
+        targetLength = results
+            .map((e) => e.length)
+            .reduce((a, b) => a > b ? a : b);
       }
 
       if (_paddingConfig!.padToMultipleOf != null) {
@@ -422,7 +424,9 @@ class SentencePieceTokenizer {
     // Calculate number of special tokens for truncation
     var numSpecialTokens = 0;
     if (shouldAddBos && vocab.bosId >= 0) numSpecialTokens++;
-    if (shouldAddEos && vocab.eosId >= 0) numSpecialTokens += 2; // separator + end
+    if (shouldAddEos && vocab.eosId >= 0) {
+      numSpecialTokens += 2; // separator + end
+    }
 
     // Encode both sequences without special tokens
     final savedPadding = _paddingConfig;
@@ -511,7 +515,11 @@ class SentencePieceTokenizer {
   }
 
   /// Encode a sequence without special tokens, for internal use.
-  Encoding _encodeSequence(String text, {required int typeId, required int sequenceId}) {
+  Encoding _encodeSequence(
+    String text, {
+    required int typeId,
+    required int sequenceId,
+  }) {
     final normalized = _normalizer.normalize(text);
     final tokenIds = _algorithm.tokenize(normalized);
 
@@ -550,13 +558,15 @@ class SentencePieceTokenizer {
     _truncationConfig = null;
 
     final encodings = textPairs
-        .map((pair) => encodePair(
-              pair.$1,
-              pair.$2,
-              addSpecialTokens: addSpecialTokens,
-              maxLength: maxLength,
-              strategy: strategy,
-            ))
+        .map(
+          (pair) => encodePair(
+            pair.$1,
+            pair.$2,
+            addSpecialTokens: addSpecialTokens,
+            maxLength: maxLength,
+            strategy: strategy,
+          ),
+        )
         .toList();
 
     _paddingConfig = savedPadding;
@@ -607,12 +617,8 @@ class SentencePieceTokenizer {
 
       futures.add(
         Isolate.run(
-          () => _encodeChunkInIsolate(
-            chunk,
-            modelData,
-            config,
-            addSpecialTokens,
-          ),
+          () =>
+              _encodeChunkInIsolate(chunk, modelData, config, addSpecialTokens),
         ),
       );
     }
@@ -942,7 +948,9 @@ class _SerializableModelData {
     required this.escapeWhitespaces,
   });
 
-  factory _SerializableModelData.fromTokenizer(SentencePieceTokenizer tokenizer) {
+  factory _SerializableModelData.fromTokenizer(
+    SentencePieceTokenizer tokenizer,
+  ) {
     return _SerializableModelData(
       pieces: tokenizer.vocab.pieces,
       scores: tokenizer.vocab.scores.toList(),
@@ -970,11 +978,13 @@ class _SerializableModelData {
     // Reconstruct the model
     final modelPieces = <SentencePiece>[];
     for (var i = 0; i < pieces.length; i++) {
-      modelPieces.add(SentencePiece(
-        piece: pieces[i],
-        score: scores[i],
-        type: PieceType.fromValue(types[i]),
-      ));
+      modelPieces.add(
+        SentencePiece(
+          piece: pieces[i],
+          score: scores[i],
+          type: PieceType.fromValue(types[i]),
+        ),
+      );
     }
 
     final model = SentencePieceModel(
