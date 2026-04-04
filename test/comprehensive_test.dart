@@ -1,6 +1,8 @@
 /// Comprehensive test suite for SentencePiece tokenizer.
 ///
 /// Tests core functionality, edge cases, and integration scenarios.
+library;
+
 import 'package:test/test.dart';
 import 'package:dart_sentencepiece_tokenizer/dart_sentencepiece_tokenizer.dart';
 
@@ -879,7 +881,7 @@ void main() {
     });
 
     test('full pipeline: encode without special, truncate, then decode', () {
-      final text = 'hello world test sentence';
+      const text = 'hello world test sentence';
 
       // Encode without special tokens
       final encoding = tokenizer.encode(text, addSpecialTokens: false);
@@ -898,8 +900,8 @@ void main() {
     });
 
     test('pair encoding respects maxLength exactly', () {
-      final textA = 'hello hello hello';
-      final textB = 'world world world';
+      const textA = 'hello hello hello';
+      const textB = 'world world world';
 
       for (final maxLen in [5, 10, 15]) {
         final encoding = tokenizer.encodePair(
@@ -951,7 +953,7 @@ void main() {
     });
 
     test('decode preserves original text approximately', () {
-      final text = 'hello world';
+      const text = 'hello world';
       final encoding = tokenizer.encode(text, addSpecialTokens: false);
       final decoded = tokenizer.decode(encoding.ids.toList());
 

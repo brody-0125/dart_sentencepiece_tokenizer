@@ -424,8 +424,9 @@ class SentencePieceTokenizer {
     // Calculate number of special tokens for truncation
     var numSpecialTokens = 0;
     if (shouldAddBos && vocab.bosId >= 0) numSpecialTokens++;
-    if (shouldAddEos && vocab.eosId >= 0)
+    if (shouldAddEos && vocab.eosId >= 0) {
       numSpecialTokens += 2; // separator + end
+    }
 
     // Encode both sequences without special tokens
     final savedPadding = _paddingConfig;

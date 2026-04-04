@@ -321,7 +321,7 @@ void main() {
     });
 
     test('can use TextStreamer polymorphically as BaseStreamer', () {
-      BaseStreamer streamer = tokenizer.createTextStreamer(
+      final BaseStreamer streamer = tokenizer.createTextStreamer(
         onFinalizedText: (_, {required streamEnd}) {},
       );
 

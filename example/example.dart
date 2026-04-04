@@ -42,7 +42,7 @@ void main() async {
   print('Padded length: ${paddedEncoding.length}'); // 32
 
   // Offset mapping
-  final text = 'Hello world';
+  const text = 'Hello world';
   final enc = tokenizer.encode(text, addSpecialTokens: false);
   for (var i = 0; i < enc.length; i++) {
     final offset = enc.offsets[i];
