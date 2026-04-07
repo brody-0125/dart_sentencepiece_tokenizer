@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import '../model/model_proto.dart';
+import 'precompiled_charsmap.dart';
 
 /// SentencePiece whitespace replacement character.
 const String kSpaceSymbol = '\u2581'; // ▁ (Lower One Eighth Block)
@@ -7,39 +10,65 @@ class SpNormalizer {
   final bool addDummyPrefix;
   final bool removeExtraWhitespaces;
   final bool escapeWhitespaces;
+  final String normalizerName;
+  final PrecompiledCharsmap? _charsmap;
+  final Uint8List? _precompiledCharsmapBytes;
 
-  const SpNormalizer({
+  SpNormalizer({
     this.addDummyPrefix = true,
     this.removeExtraWhitespaces = true,
     this.escapeWhitespaces = true,
-  });
+    this.normalizerName = '',
+    PrecompiledCharsmap? charsmap,
+    Uint8List? precompiledCharsmapBytes,
+  }) : _charsmap = charsmap,
+       _precompiledCharsmapBytes = precompiledCharsmapBytes;
 
   factory SpNormalizer.fromSpec(NormalizerSpec spec) {
+    PrecompiledCharsmap? charsmap;
+    final charsmapBytes = spec.precompiledCharsmap;
+    if (charsmapBytes != null && charsmapBytes.isNotEmpty) {
+      charsmap = PrecompiledCharsmap.fromBytes(charsmapBytes);
+    }
     return SpNormalizer(
       addDummyPrefix: spec.addDummyPrefix,
       removeExtraWhitespaces: spec.removeExtraWhitespaces,
       escapeWhitespaces: spec.escapeWhitespaces,
+      normalizerName: spec.name,
+      charsmap: charsmap,
+      precompiledCharsmapBytes: charsmapBytes,
     );
   }
+
+  /// Whether this normalizer has a precompiled charsmap.
+  bool get hasCharsmap => _charsmap != null;
+
+  /// Raw precompiled charsmap bytes for serialization.
+  Uint8List? get precompiledCharsmapBytes => _precompiledCharsmapBytes;
 
   String normalize(String text) {
     if (text.isEmpty) return text;
 
     var result = text;
 
-    // Step 1: Remove extra whitespaces
+    // Step 1: Apply precompiled charsmap normalization (NFKC-like)
+    if (_charsmap case final charsmap?) {
+      result = charsmap.normalize(result);
+    }
+
+    // Step 2: Remove extra whitespaces
     if (removeExtraWhitespaces) {
       result = _collapseWhitespaces(result);
     }
 
-    // Step 2: Add dummy prefix (space at beginning)
+    // Step 3: Add dummy prefix (space at beginning)
     if (addDummyPrefix &&
         result.isNotEmpty &&
         !_isWhitespace(result.codeUnitAt(0))) {
       result = ' $result';
     }
 
-    // Step 3: Escape whitespaces (replace space with ▁)
+    // Step 4: Escape whitespaces (replace space with ▁)
     if (escapeWhitespaces) {
       result = result.replaceAll(' ', kSpaceSymbol);
     }
@@ -111,5 +140,7 @@ class SpNormalizer {
       'SpNormalizer('
       'addDummyPrefix: $addDummyPrefix, '
       'removeExtraWhitespaces: $removeExtraWhitespaces, '
-      'escapeWhitespaces: $escapeWhitespaces)';
+      'escapeWhitespaces: $escapeWhitespaces, '
+      'normalizerName: $normalizerName, '
+      'hasCharsmap: $hasCharsmap)';
 }
