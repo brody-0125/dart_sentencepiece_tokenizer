@@ -928,8 +928,9 @@ class _SerializableModelData {
   final bool addDummyPrefix;
   final bool removeExtraWhitespaces;
   final bool escapeWhitespaces;
+  final Uint8List? precompiledCharsmap;
 
-  const _SerializableModelData({
+  _SerializableModelData({
     required this.pieces,
     required this.scores,
     required this.types,
@@ -946,6 +947,7 @@ class _SerializableModelData {
     required this.addDummyPrefix,
     required this.removeExtraWhitespaces,
     required this.escapeWhitespaces,
+    this.precompiledCharsmap,
   });
 
   factory _SerializableModelData.fromTokenizer(
@@ -971,6 +973,7 @@ class _SerializableModelData {
       addDummyPrefix: tokenizer._normalizer.addDummyPrefix,
       removeExtraWhitespaces: tokenizer._normalizer.removeExtraWhitespaces,
       escapeWhitespaces: tokenizer._normalizer.escapeWhitespaces,
+      precompiledCharsmap: tokenizer._normalizer.precompiledCharsmapBytes,
     );
   }
 
@@ -1007,6 +1010,7 @@ class _SerializableModelData {
         addDummyPrefix: addDummyPrefix,
         removeExtraWhitespaces: removeExtraWhitespaces,
         escapeWhitespaces: escapeWhitespaces,
+        precompiledCharsmap: precompiledCharsmap,
       ),
     );
 

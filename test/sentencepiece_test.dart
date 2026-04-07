@@ -62,7 +62,7 @@ void main() {
 
   group('SpNormalizer', () {
     test('normalize with default settings', () {
-      const normalizer = SpNormalizer();
+      final normalizer = SpNormalizer();
 
       // Should add dummy prefix and escape whitespaces
       final result = normalizer.normalize('hello world');
@@ -72,7 +72,7 @@ void main() {
     });
 
     test('normalize without dummy prefix', () {
-      const normalizer = SpNormalizer(addDummyPrefix: false);
+      final normalizer = SpNormalizer(addDummyPrefix: false);
 
       final result = normalizer.normalize('hello world');
 
@@ -80,7 +80,7 @@ void main() {
     });
 
     test('remove extra whitespaces', () {
-      const normalizer = SpNormalizer(removeExtraWhitespaces: true);
+      final normalizer = SpNormalizer(removeExtraWhitespaces: true);
 
       final result = normalizer.normalize('hello   world');
 
@@ -89,7 +89,7 @@ void main() {
     });
 
     test('preserve whitespaces when not escaping', () {
-      const normalizer = SpNormalizer(escapeWhitespaces: false);
+      final normalizer = SpNormalizer(escapeWhitespaces: false);
 
       final result = normalizer.normalize('hello');
 
@@ -97,7 +97,7 @@ void main() {
     });
 
     test('denormalize reverses normalize', () {
-      const normalizer = SpNormalizer();
+      final normalizer = SpNormalizer();
 
       final normalized = normalizer.normalize('hello world');
       final denormalized = normalizer.denormalize(normalized);
@@ -106,7 +106,7 @@ void main() {
     });
 
     test('empty string', () {
-      const normalizer = SpNormalizer();
+      final normalizer = SpNormalizer();
 
       expect(normalizer.normalize(''), equals(''));
       expect(normalizer.denormalize(''), equals(''));

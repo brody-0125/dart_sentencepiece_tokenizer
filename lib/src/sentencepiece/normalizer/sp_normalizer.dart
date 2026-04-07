@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import '../model/model_proto.dart';
+import 'precompiled_charsmap.dart';
 
 /// SentencePiece whitespace replacement character.
 const String kSpaceSymbol = '\u2581'; // ▁ (Lower One Eighth Block)
@@ -7,25 +10,41 @@ class SpNormalizer {
   final bool addDummyPrefix;
   final bool removeExtraWhitespaces;
   final bool escapeWhitespaces;
+  final PrecompiledCharsMap? _charsmap;
 
-  const SpNormalizer({
+  SpNormalizer({
     this.addDummyPrefix = true,
     this.removeExtraWhitespaces = true,
     this.escapeWhitespaces = true,
-  });
+    PrecompiledCharsMap? precompiledCharsmap,
+  }) : _charsmap = precompiledCharsmap;
 
   factory SpNormalizer.fromSpec(NormalizerSpec spec) {
+    PrecompiledCharsMap? charsmap;
+    if (spec.precompiledCharsmap != null &&
+        spec.precompiledCharsmap!.isNotEmpty) {
+      charsmap = PrecompiledCharsMap(spec.precompiledCharsmap!);
+    }
     return SpNormalizer(
       addDummyPrefix: spec.addDummyPrefix,
       removeExtraWhitespaces: spec.removeExtraWhitespaces,
       escapeWhitespaces: spec.escapeWhitespaces,
+      precompiledCharsmap: charsmap,
     );
   }
+
+  /// Returns the raw precompiled charsmap bytes for serialization.
+  Uint8List? get precompiledCharsmapBytes => _charsmap?.rawBytes;
 
   String normalize(String text) {
     if (text.isEmpty) return text;
 
     var result = text;
+
+    // Step 0: Apply precompiled charsmap normalization
+    if (_charsmap != null) {
+      result = _charsmap.normalize(result);
+    }
 
     // Step 1: Remove extra whitespaces
     if (removeExtraWhitespaces) {
