@@ -177,6 +177,11 @@ final seqIdx = encoding.tokenToSequence(1);
 
 ### Vocabulary Access
 
+> **Note:** Default special token IDs (`unkId=0, bosId=1, eosId=2, padId=-1`) follow the
+> [google/sentencepiece proto spec](https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto).
+> Some models use different values (e.g. Gemma: `pad=0, eos=1, bos=2`), which are
+> automatically parsed from the model file at load time.
+
 ```dart
 print(tokenizer.vocabSize);     // 32000
 print(tokenizer.vocab.unkId);   // 0

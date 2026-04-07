@@ -62,6 +62,11 @@ class SentencePiece {
 }
 
 /// Training specification from the model.
+///
+/// Default token IDs (unkId=0, bosId=1, eosId=2, padId=-1) comply with the
+/// google/sentencepiece proto spec (sentencepiece_model.proto). Some models
+/// (e.g. Gemma: pad=0, eos=1, bos=2) use different values, which are
+/// correctly parsed from the model file at runtime.
 class TrainerSpec {
   final ModelType modelType;
   final int vocabSize;
@@ -78,6 +83,7 @@ class TrainerSpec {
   const TrainerSpec({
     this.modelType = ModelType.unigram,
     this.vocabSize = 8000,
+    // Default token IDs per google/sentencepiece proto spec.
     this.unkId = 0,
     this.bosId = 1,
     this.eosId = 2,
