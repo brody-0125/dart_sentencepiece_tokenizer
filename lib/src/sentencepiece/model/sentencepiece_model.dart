@@ -120,6 +120,8 @@ class SentencePieceModelLoader {
   static TrainerSpec _parseTrainerSpec(ProtobufReader reader) {
     ModelType modelType = ModelType.unigram;
     int vocabSize = 8000;
+    // Defaults per google/sentencepiece proto spec (sentencepiece_model.proto).
+    // These are overridden by actual values parsed from the model file below.
     int unkId = 0;
     int bosId = 1;
     int eosId = 2;

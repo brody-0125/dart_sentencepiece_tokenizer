@@ -96,13 +96,14 @@ Uint8List _createMinimalTestModel() {
   }
 
   // Add trainer_spec (field 2)
+  // Default token IDs follow the google/sentencepiece proto spec.
   final trainerSpec = _ProtobufBuilder();
   trainerSpec.writeVarint(1, 1); // model_type = unigram
   trainerSpec.writeVarint(3, testPieces.length); // vocab_size
-  trainerSpec.writeVarint(40, 0); // unk_id
-  trainerSpec.writeVarint(41, 1); // bos_id
-  trainerSpec.writeVarint(42, 2); // eos_id
-  trainerSpec.writeVarint(43, -1); // pad_id (not set)
+  trainerSpec.writeVarint(40, 0); // unk_id (proto default)
+  trainerSpec.writeVarint(41, 1); // bos_id (proto default)
+  trainerSpec.writeVarint(42, 2); // eos_id (proto default)
+  trainerSpec.writeVarint(43, -1); // pad_id (proto default, -1 = unused)
   builder.writeBytes(2, trainerSpec.toBytes());
 
   // Add normalizer_spec (field 3)
