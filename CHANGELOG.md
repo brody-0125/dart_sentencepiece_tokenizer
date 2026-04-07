@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2026-04-07
+
+### Added
+
+- **GitHub Actions CI Pipeline** (#9, #19)
+  - `analyze` job - `dart format --set-exit-if-changed` and `dart analyze --fatal-infos`
+  - `test` job - Matrix testing across Dart stable and 3.10.7 (minimum supported version)
+  - Minimal permissions (`contents: read`) and concurrency group to cancel stale runs
+
+### Changed
+
+- Applied `dart format` to 23 files for consistent code style
+- Resolved all `dart analyze --fatal-infos` issues
+  - Removed deprecated `avoid_returning_null_for_future` lint rule
+  - Added curly braces to if statements, `const` constructors, `final` local variables
+- Added documentation comments clarifying `google/sentencepiece` proto spec compliance for default token IDs (`unkId=0, bosId=1, eosId=2, padId=-1`) (#20)
+
 ## [1.3.1] - 2026-04-03
 
 ### Added
