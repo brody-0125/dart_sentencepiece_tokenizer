@@ -1,5 +1,6 @@
 # dart_sentencepiece_tokenizer
 
+![CI](https://github.com/brody-0125/dart_sentencepiece_tokenizer/actions/workflows/ci.yml/badge.svg)
 ![Dart](https://img.shields.io/badge/Dart-3.10.7+-0175C2.svg?logo=dart)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Compatible-FF6600)
@@ -17,13 +18,14 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **Streaming API** - HuggingFace TextStreamer compatible for real-time LLM output
 - **HuggingFace Compatible** - JSON serialization, dynamic token addition, tokenize() API
 - **HuggingFace tokenizer.json** - Load tokenizers directly from HuggingFace `tokenizer.json` format
-- **Well Tested** - 274+ tests with 100% pass rate
+- **CI/CD** - GitHub Actions with format check, lint, and multi-version testing
+- **Well Tested** - 302+ tests with 100% pass rate
 
 ## Installation
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.3.1
+  dart_sentencepiece_tokenizer: ^1.3.2
 ```
 
 ## Quick Start
@@ -509,7 +511,7 @@ Download SentencePiece models from HuggingFace:
 ## Testing
 
 ```bash
-# Run all tests (274 tests)
+# Run all tests (302+ tests)
 dart test
 
 # Run specific test file
