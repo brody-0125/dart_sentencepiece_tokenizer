@@ -96,51 +96,43 @@ class PrecompiledCharsmap {
   ///
   /// Returns (matchLength, normalizedStringOffset) or null if no match.
   (int, int)? _longestPrefixMatch(Uint8List input, int start) {
+    final arrayLen = _array.length;
     var nodePos = 0;
     var unit = _array[0];
     nodePos ^= _offset(unit);
 
-    int? longestLength;
-    int? longestValue;
+    var longestLength = 0;
+    var longestValue = 0;
 
     for (var i = start; i < input.length; i++) {
       final c = input[i];
 
-      // Transition: move to child node for byte c
       nodePos ^= c;
-      if (nodePos >= _array.length) break;
+      if (nodePos >= arrayLen) break;
 
       unit = _array[nodePos];
       if (_label(unit) != c) break;
 
-      // Move to the base of this node's children
       nodePos ^= _offset(unit);
 
-      // Check if this node has an output value (leaf)
       if (_hasLeaf(unit)) {
-        if (nodePos >= _array.length) break;
-        final leafUnit = _array[nodePos];
-        final value = _value(leafUnit);
-        final length = i - start + 1;
-        if (longestLength == null || length > longestLength) {
-          longestLength = length;
-          longestValue = value;
-        }
+        if (nodePos >= arrayLen) break;
+        longestValue = _value(_array[nodePos]);
+        longestLength = i - start + 1;
       }
     }
 
-    if (longestLength != null && longestValue != null) {
-      return (longestLength, longestValue);
-    }
-    return null;
+    return longestLength > 0 ? (longestLength, longestValue) : null;
   }
 
   /// Append the null-terminated normalized string at [offset] to [output].
   void _appendNormalizedString(BytesBuilder output, int offset) {
-    var i = offset;
-    while (i < _normalized.length && _normalized[i] != 0) {
-      output.addByte(_normalized[i]);
-      i++;
+    var end = offset;
+    while (end < _normalized.length && _normalized[end] != 0) {
+      end++;
+    }
+    if (end > offset) {
+      output.add(Uint8List.sublistView(_normalized, offset, end));
     }
   }
 
