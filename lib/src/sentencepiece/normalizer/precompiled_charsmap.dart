@@ -50,9 +50,7 @@ class PrecompiledCharsmap {
 
     // Copy normalized string pool to an owned buffer so the original
     // model file data can be garbage-collected.
-    final normalized = Uint8List.fromList(
-      Uint8List.sublistView(data, 4 + trieBlobSize),
-    );
+    final normalized = data.sublist(4 + trieBlobSize);
 
     return PrecompiledCharsmap._(array, normalized);
   }
