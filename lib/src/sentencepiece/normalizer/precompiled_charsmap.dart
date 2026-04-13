@@ -48,8 +48,9 @@ class PrecompiledCharsmap {
       array[i] = trieByteData.getUint32(i * 4, Endian.little);
     }
 
-    // Normalized string pool (null-terminated UTF-8 strings)
-    final normalized = Uint8List.sublistView(data, 4 + trieBlobSize);
+    // Copy normalized string pool to an owned buffer so the original
+    // model file data can be garbage-collected.
+    final normalized = data.sublist(4 + trieBlobSize);
 
     return PrecompiledCharsmap._(array, normalized);
   }
@@ -74,7 +75,7 @@ class PrecompiledCharsmap {
         _appendNormalizedString(output, normalizedOffset);
         pos += matchLength;
       } else {
-        // No match: copy one UTF-8 character unchanged
+        // Unmatched characters pass through for lossless preservation
         final charLen = _utf8CharLength(inputBytes[pos]);
         if (charLen > 0 && pos + charLen <= inputBytes.length) {
           for (var i = 0; i < charLen; i++) {
@@ -82,7 +83,7 @@ class PrecompiledCharsmap {
           }
           pos += charLen;
         } else {
-          // Invalid UTF-8: emit U+FFFD replacement character
+          // U+FFFD: Unicode standard replacement for malformed sequences
           output.add(const [0xEF, 0xBF, 0xBD]);
           pos++;
         }
@@ -153,6 +154,30 @@ class PrecompiledCharsmap {
   /// Uses a two-level encoding: bit 9 selects between 22-bit and 30-bit offsets.
   int _offset(int unit) {
     return (unit >> 10) << ((unit & (1 << 9)) >> 6);
+  }
+
+  /// Serialize this charsmap back to its binary representation.
+  ///
+  /// The output is byte-identical to the original input passed to [fromBytes],
+  /// enabling lossless round-trip serialization without storing raw bytes.
+  Uint8List toBytes() {
+    final trieBlobSize = _array.length * 4;
+    final totalSize = 4 + trieBlobSize + _normalized.length;
+    final data = ByteData(totalSize);
+
+    // Header: trie blob size
+    data.setUint32(0, trieBlobSize, Endian.little);
+
+    // Trie array (little-endian uint32 units)
+    for (var i = 0; i < _array.length; i++) {
+      data.setUint32(4 + i * 4, _array[i], Endian.little);
+    }
+
+    // Normalized string pool
+    final bytes = data.buffer.asUint8List();
+    bytes.setRange(4 + trieBlobSize, totalSize, _normalized);
+
+    return bytes;
   }
 
   /// Returns the byte length of a UTF-8 character starting with [byte].

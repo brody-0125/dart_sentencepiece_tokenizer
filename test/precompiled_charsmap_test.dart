@@ -122,6 +122,28 @@ void main() {
       });
     });
 
+    group('prefix-sharing keys', () {
+      test('longest match wins when keys share a prefix', () {
+        // Both "A" and "AB" are mapped; "AB" should win for "AB" input
+        final blob = _buildCharsmapBlob({'A': '1', 'AB': '2'});
+        final charsmap = PrecompiledCharsmap.fromBytes(blob);
+        expect(charsmap.normalize('AB'), equals('2'));
+      });
+
+      test('shorter key matches when longer prefix is absent', () {
+        final blob = _buildCharsmapBlob({'A': '1', 'AB': '2'});
+        final charsmap = PrecompiledCharsmap.fromBytes(blob);
+        expect(charsmap.normalize('AC'), equals('1C'));
+      });
+
+      test('multiple prefix-sharing keys in sequence', () {
+        final blob = _buildCharsmapBlob({'A': '1', 'AB': '2', 'ABC': '3'});
+        final charsmap = PrecompiledCharsmap.fromBytes(blob);
+        // ABC→3, AB→2 (longest for ABD), D→passthrough
+        expect(charsmap.normalize('ABCABD'), equals('32D'));
+      });
+    });
+
     group('edge cases', () {
       test('empty input returns empty string', () {
         final blob = _buildCharsmapBlob({'A': 'a'});
@@ -235,12 +257,6 @@ void main() {
 
 /// Build a precompiled charsmap binary blob from string-to-string mappings.
 Uint8List _buildCharsmapBlob(Map<String, String> mappings) {
-  // Convert string keys to UTF-8 byte sequences
-  final entries = <List<int>, String>{};
-  for (final entry in mappings.entries) {
-    entries[utf8.encode(entry.key)] = entry.value;
-  }
-
   // Build normalized string table
   final normalizedBytes = BytesBuilder();
   final offsets = <String, int>{};
