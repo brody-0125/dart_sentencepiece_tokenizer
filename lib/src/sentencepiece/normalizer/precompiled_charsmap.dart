@@ -49,12 +49,10 @@ class PrecompiledCharsMap {
   }
 
   /// Returns the base value for node at [index]. Caller must ensure validity.
-  int _base(int index) =>
-      _trieData.getInt32(index * 8, Endian.little);
+  int _base(int index) => _trieData.getInt32(index * 8, Endian.little);
 
   /// Returns the check value for node at [index]. Caller must ensure validity.
-  int _check(int index) =>
-      _trieData.getInt32(index * 8 + 4, Endian.little);
+  int _check(int index) => _trieData.getInt32(index * 8 + 4, Endian.little);
 
   bool _isValidNode(int index) => index >= 0 && index < _trieNodeCount;
 
