@@ -27,9 +27,7 @@ void main() {
         final data = ByteData(4);
         data.setUint32(0, 1000, Endian.little);
         expect(
-          () => PrecompiledCharsmap.fromBytes(
-            data.buffer.asUint8List(),
-          ),
+          () => PrecompiledCharsmap.fromBytes(data.buffer.asUint8List()),
           throwsFormatException,
         );
       });
@@ -38,9 +36,7 @@ void main() {
         final blob = ByteData(4 + 7);
         blob.setUint32(0, 7, Endian.little);
         expect(
-          () => PrecompiledCharsmap.fromBytes(
-            blob.buffer.asUint8List(),
-          ),
+          () => PrecompiledCharsmap.fromBytes(blob.buffer.asUint8List()),
           throwsFormatException,
         );
       });
@@ -113,17 +109,11 @@ void main() {
           '\uFB01': 'fi', // ﬁ → fi
         });
         final charsmap = PrecompiledCharsmap.fromBytes(blob);
-        expect(
-          charsmap.normalize('\uFF21\uFB01\uFF22'),
-          equals('AfiB'),
-        );
+        expect(charsmap.normalize('\uFF21\uFB01\uFF22'), equals('AfiB'));
       });
 
       test('handles mixed mapped and unmapped characters', () {
-        final blob = _buildCharsmapBlob({
-          '\uFF21': 'A',
-          '\uFF22': 'B',
-        });
+        final blob = _buildCharsmapBlob({'\uFF21': 'A', '\uFF22': 'B'});
         final charsmap = PrecompiledCharsmap.fromBytes(blob);
         expect(
           charsmap.normalize('hello \uFF21 world \uFF22'),
@@ -142,37 +132,25 @@ void main() {
       test('all characters unmapped passes through unchanged', () {
         final blob = _buildCharsmapBlob({'X': 'x'});
         final charsmap = PrecompiledCharsmap.fromBytes(blob);
-        expect(
-          charsmap.normalize('hello world'),
-          equals('hello world'),
-        );
+        expect(charsmap.normalize('hello world'), equals('hello world'));
       });
 
       test('handles Korean text passthrough', () {
         final blob = _buildCharsmapBlob({'A': 'a'});
         final charsmap = PrecompiledCharsmap.fromBytes(blob);
-        expect(
-          charsmap.normalize('안녕하세요'),
-          equals('안녕하세요'),
-        );
+        expect(charsmap.normalize('안녕하세요'), equals('안녕하세요'));
       });
 
       test('handles CJK text passthrough', () {
         final blob = _buildCharsmapBlob({'A': 'a'});
         final charsmap = PrecompiledCharsmap.fromBytes(blob);
-        expect(
-          charsmap.normalize('你好世界'),
-          equals('你好世界'),
-        );
+        expect(charsmap.normalize('你好世界'), equals('你好世界'));
       });
 
       test('handles emoji passthrough', () {
         final blob = _buildCharsmapBlob({'A': 'a'});
         final charsmap = PrecompiledCharsmap.fromBytes(blob);
-        expect(
-          charsmap.normalize('Hello 👋 World'),
-          equals('Hello 👋 World'),
-        );
+        expect(charsmap.normalize('Hello 👋 World'), equals('Hello 👋 World'));
       });
     });
   });
@@ -241,8 +219,14 @@ void main() {
         escapeWhitespaces: true,
       );
       expect(normalizer.hasCharsmap, isFalse);
-      expect(normalizer.normalize('hello world'), equals('\u2581hello\u2581world'));
-      expect(normalizer.denormalize('\u2581hello\u2581world'), equals('hello world'));
+      expect(
+        normalizer.normalize('hello world'),
+        equals('\u2581hello\u2581world'),
+      );
+      expect(
+        normalizer.denormalize('\u2581hello\u2581world'),
+        equals('hello world'),
+      );
     });
   });
 }

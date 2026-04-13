@@ -61,8 +61,9 @@ extension SentencePieceTokenizerJson on SentencePieceTokenizer {
         'escape_whitespaces': normalizer.escapeWhitespaces,
         'normalizer_name': normalizer.normalizerName,
         if (normalizer.precompiledCharsmapBytes != null)
-          'precompiled_charsmap':
-              base64Encode(normalizer.precompiledCharsmapBytes!),
+          'precompiled_charsmap': base64Encode(
+            normalizer.precompiledCharsmapBytes!,
+          ),
       },
       'config': {
         'add_bos_token': config.addBosToken,
@@ -187,8 +188,7 @@ class TokenizerJsonLoader {
         normalizerData['remove_extra_whitespaces'] as bool? ?? true;
     final escapeWhitespaces =
         normalizerData['escape_whitespaces'] as bool? ?? true;
-    final normalizerName =
-        normalizerData['normalizer_name'] as String? ?? '';
+    final normalizerName = normalizerData['normalizer_name'] as String? ?? '';
     Uint8List? precompiledCharsmap;
     final charsmapB64 = normalizerData['precompiled_charsmap'] as String?;
     if (charsmapB64 != null) {
