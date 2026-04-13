@@ -139,7 +139,8 @@ void main() {
       test('multiple prefix-sharing keys in sequence', () {
         final blob = _buildCharsmapBlob({'A': '1', 'AB': '2', 'ABC': '3'});
         final charsmap = PrecompiledCharsmap.fromBytes(blob);
-        expect(charsmap.normalize('ABCABD'), equals('31D'));
+        // ABC→3, AB→2 (longest for ABD), D→passthrough
+        expect(charsmap.normalize('ABCABD'), equals('32D'));
       });
     });
 

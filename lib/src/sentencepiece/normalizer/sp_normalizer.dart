@@ -12,7 +12,6 @@ class SpNormalizer {
   final bool escapeWhitespaces;
   final String normalizerName;
   final PrecompiledCharsmap? _charsmap;
-  final Uint8List? _precompiledCharsmapBytes;
 
   SpNormalizer({
     this.addDummyPrefix = true,
@@ -20,9 +19,7 @@ class SpNormalizer {
     this.escapeWhitespaces = true,
     this.normalizerName = '',
     PrecompiledCharsmap? charsmap,
-    Uint8List? precompiledCharsmapBytes,
-  }) : _charsmap = charsmap,
-       _precompiledCharsmapBytes = precompiledCharsmapBytes;
+  }) : _charsmap = charsmap;
 
   factory SpNormalizer.fromSpec(NormalizerSpec spec) {
     PrecompiledCharsmap? charsmap;
@@ -36,15 +33,17 @@ class SpNormalizer {
       escapeWhitespaces: spec.escapeWhitespaces,
       normalizerName: spec.name,
       charsmap: charsmap,
-      precompiledCharsmapBytes: charsmapBytes,
     );
   }
 
   /// Whether this normalizer has a precompiled charsmap.
   bool get hasCharsmap => _charsmap != null;
 
-  /// Raw precompiled charsmap bytes for serialization.
-  Uint8List? get precompiledCharsmapBytes => _precompiledCharsmapBytes;
+  /// Precompiled charsmap bytes for serialization.
+  ///
+  /// Reconstructed on demand from the parsed trie via [PrecompiledCharsmap.toBytes],
+  /// avoiding duplicate storage of both raw bytes and parsed structures.
+  Uint8List? get precompiledCharsmapBytes => _charsmap?.toBytes();
 
   String normalize(String text) {
     if (text.isEmpty) return text;

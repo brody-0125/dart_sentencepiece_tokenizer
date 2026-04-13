@@ -155,6 +155,30 @@ class PrecompiledCharsmap {
     return (unit >> 10) << ((unit & (1 << 9)) >> 6);
   }
 
+  /// Serialize this charsmap back to its binary representation.
+  ///
+  /// The output is byte-identical to the original input passed to [fromBytes],
+  /// enabling lossless round-trip serialization without storing raw bytes.
+  Uint8List toBytes() {
+    final trieBlobSize = _array.length * 4;
+    final totalSize = 4 + trieBlobSize + _normalized.length;
+    final data = ByteData(totalSize);
+
+    // Header: trie blob size
+    data.setUint32(0, trieBlobSize, Endian.little);
+
+    // Trie array (little-endian uint32 units)
+    for (var i = 0; i < _array.length; i++) {
+      data.setUint32(4 + i * 4, _array[i], Endian.little);
+    }
+
+    // Normalized string pool
+    final bytes = data.buffer.asUint8List();
+    bytes.setRange(4 + trieBlobSize, totalSize, _normalized);
+
+    return bytes;
+  }
+
   /// Returns the byte length of a UTF-8 character starting with [byte].
   /// Returns 0 for invalid lead bytes.
   static int _utf8CharLength(int byte) {
