@@ -60,7 +60,7 @@ extension SentencePieceTokenizerJson on SentencePieceTokenizer {
         'remove_extra_whitespaces': normalizer.removeExtraWhitespaces,
         'escape_whitespaces': normalizer.escapeWhitespaces,
         'normalizer_name': normalizer.normalizerName,
-        if (normalizer.precompiledCharsmapBytes != null)
+        if (normalizer.hasCharsmap)
           'precompiled_charsmap': base64Encode(
             normalizer.precompiledCharsmapBytes!,
           ),

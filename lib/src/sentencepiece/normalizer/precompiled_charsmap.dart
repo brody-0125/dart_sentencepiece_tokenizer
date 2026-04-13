@@ -48,8 +48,11 @@ class PrecompiledCharsmap {
       array[i] = trieByteData.getUint32(i * 4, Endian.little);
     }
 
-    // Normalized string pool (null-terminated UTF-8 strings)
-    final normalized = Uint8List.sublistView(data, 4 + trieBlobSize);
+    // Copy normalized string pool to an owned buffer so the original
+    // model file data can be garbage-collected.
+    final normalized = Uint8List.fromList(
+      Uint8List.sublistView(data, 4 + trieBlobSize),
+    );
 
     return PrecompiledCharsmap._(array, normalized);
   }
@@ -74,7 +77,7 @@ class PrecompiledCharsmap {
         _appendNormalizedString(output, normalizedOffset);
         pos += matchLength;
       } else {
-        // No match: copy one UTF-8 character unchanged
+        // Unmatched characters pass through for lossless preservation
         final charLen = _utf8CharLength(inputBytes[pos]);
         if (charLen > 0 && pos + charLen <= inputBytes.length) {
           for (var i = 0; i < charLen; i++) {
@@ -82,7 +85,7 @@ class PrecompiledCharsmap {
           }
           pos += charLen;
         } else {
-          // Invalid UTF-8: emit U+FFFD replacement character
+          // U+FFFD: Unicode standard replacement for malformed sequences
           output.add(const [0xEF, 0xBF, 0xBD]);
           pos++;
         }
