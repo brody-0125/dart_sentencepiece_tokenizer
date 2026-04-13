@@ -96,14 +96,17 @@ void _analyzeIsolateScenario() {
   // AFTER: main isolate stores parsed only; toBytes() on demand for isolate transfer;
   // each worker receives raw bytes then parses (parsed only in worker)
   final afterMain = charsmapSize; // parsed only
-  final afterPerWorker = charsmapSize; // parsed only (raw bytes from toBytes() are transient)
+  final afterPerWorker =
+      charsmapSize; // parsed only (raw bytes from toBytes() are transient)
   final afterTotal = afterMain + numWorkers * afterPerWorker;
 
   final savedTotal = beforeTotal - afterTotal;
 
   print('  BEFORE optimization:');
   print('    Main isolate:   ${_formatBytes(beforeMain)} (raw + parsed)');
-  print('    Per worker:     ${_formatBytes(beforePerWorker)} (copied raw + parsed)');
+  print(
+    '    Per worker:     ${_formatBytes(beforePerWorker)} (copied raw + parsed)',
+  );
   print('    Total:          ${_formatBytes(beforeTotal)}');
   print('');
   print('  AFTER optimization (toBytes() on demand):');
@@ -111,8 +114,10 @@ void _analyzeIsolateScenario() {
   print('    Per worker:     ${_formatBytes(afterPerWorker)} (parsed only)');
   print('    Total:          ${_formatBytes(afterTotal)}');
   print('');
-  print('  Memory saved:     ${_formatBytes(savedTotal)} '
-      '(-${(savedTotal / beforeTotal * 100).toStringAsFixed(1)}%)');
+  print(
+    '  Memory saved:     ${_formatBytes(savedTotal)} '
+    '(-${(savedTotal / beforeTotal * 100).toStringAsFixed(1)}%)',
+  );
 
   // Compare with total tokenizer memory
   const vocabMemory = 3 * 1024 * 1024;
@@ -121,17 +126,23 @@ void _analyzeIsolateScenario() {
   print('  Context (with vocab ~3MB per isolate):');
   print('  | Component     | Before    | After     | Saved     |');
   print('  |---------------|-----------|-----------|-----------|');
-  print('  | Charsmap      | ${_formatBytes(beforeTotal).padLeft(9)} '
-      '| ${_formatBytes(afterTotal).padLeft(9)} '
-      '| ${_formatBytes(savedTotal).padLeft(9)} |');
-  print('  | Vocab (5 iso) | ${_formatBytes(vocabMemory * 5).padLeft(9)} '
-      '| ${_formatBytes(vocabMemory * 5).padLeft(9)} '
-      '| ${'0 B'.padLeft(9)} |');
+  print(
+    '  | Charsmap      | ${_formatBytes(beforeTotal).padLeft(9)} '
+    '| ${_formatBytes(afterTotal).padLeft(9)} '
+    '| ${_formatBytes(savedTotal).padLeft(9)} |',
+  );
+  print(
+    '  | Vocab (5 iso) | ${_formatBytes(vocabMemory * 5).padLeft(9)} '
+    '| ${_formatBytes(vocabMemory * 5).padLeft(9)} '
+    '| ${'0 B'.padLeft(9)} |',
+  );
   final totalBefore = beforeTotal + vocabMemory * 5;
   final totalAfter = afterTotal + vocabMemory * 5;
-  print('  | TOTAL         | ${_formatBytes(totalBefore).padLeft(9)} '
-      '| ${_formatBytes(totalAfter).padLeft(9)} '
-      '| ${_formatBytes(totalBefore - totalAfter).padLeft(9)} |');
+  print(
+    '  | TOTAL         | ${_formatBytes(totalBefore).padLeft(9)} '
+    '| ${_formatBytes(totalAfter).padLeft(9)} '
+    '| ${_formatBytes(totalBefore - totalAfter).padLeft(9)} |',
+  );
 
   print('');
   print('  On-device impact:');
@@ -145,12 +156,12 @@ void _analyzeIsolateScenario() {
   };
 
   for (final entry in budgets.entries) {
-    final beforePct =
-        (totalBefore / entry.value * 100).toStringAsFixed(2);
-    final afterPct =
-        (totalAfter / entry.value * 100).toStringAsFixed(2);
-    print('  | ${entry.key} | ${_formatBytes(entry.value).padLeft(9)} '
-        '| ${beforePct.padLeft(7)}% | ${afterPct.padLeft(7)}% |');
+    final beforePct = (totalBefore / entry.value * 100).toStringAsFixed(2);
+    final afterPct = (totalAfter / entry.value * 100).toStringAsFixed(2);
+    print(
+      '  | ${entry.key} | ${_formatBytes(entry.value).padLeft(9)} '
+      '| ${beforePct.padLeft(7)}% | ${afterPct.padLeft(7)}% |',
+    );
   }
 }
 
@@ -164,10 +175,12 @@ void _verifyToBytes() {
     final reconstructed = charsmap.toBytes();
     final match = _bytesEqual(original, reconstructed);
 
-    print('  ${_formatBytes(size).padRight(10)}: '
-        '${match ? "PASS" : "FAIL"} '
-        '(original=${_formatBytes(original.length)}, '
-        'reconstructed=${_formatBytes(reconstructed.length)})');
+    print(
+      '  ${_formatBytes(size).padRight(10)}: '
+      '${match ? "PASS" : "FAIL"} '
+      '(original=${_formatBytes(original.length)}, '
+      'reconstructed=${_formatBytes(reconstructed.length)})',
+    );
   }
 
   // Verify SpNormalizer.precompiledCharsmapBytes works via toBytes()
@@ -182,9 +195,11 @@ void _verifyToBytes() {
   );
   final normalizer = SpNormalizer.fromSpec(spec);
   final roundTripped = normalizer.precompiledCharsmapBytes!;
-  print('  SpNormalizer round-trip: '
-      '${_bytesEqual(blob, roundTripped) ? "PASS" : "FAIL"} '
-      '(no raw bytes stored, reconstructed on demand)');
+  print(
+    '  SpNormalizer round-trip: '
+    '${_bytesEqual(blob, roundTripped) ? "PASS" : "FAIL"} '
+    '(no raw bytes stored, reconstructed on demand)',
+  );
 }
 
 // --- Helpers ---
