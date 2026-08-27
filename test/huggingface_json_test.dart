@@ -259,7 +259,7 @@ void main() {
         () {
           // HuggingFace `tokenizers` >= 0.20 (SigLIP2, Gemma-2/3, and other recent
           // exports) emit `model.merges` as `[[left, right], ...]` arrays instead
-          // of the legacy `"left right"` strings. Both shapes must parse, and to
+          // of the legacy `"left right"` strings. Both shapes must parse to
           // identical merge scores.
           final base = _buildHfBpeJson();
           final refTok = HuggingFaceTokenizerLoader.fromJsonString(
@@ -295,6 +295,67 @@ void main() {
           }
         },
       );
+
+      test('accepts a merges array that mixes string and list shapes', () {
+        // Per-entry detection means a file may carry both shapes at once; each
+        // entry is parsed on its own. Equivalent to the all-string default.
+        final base = _buildHfBpeJson();
+        final refTok = HuggingFaceTokenizerLoader.fromJsonString(
+          jsonEncode(base),
+        );
+
+        final baseModel = base['model'] as Map<String, dynamic>;
+        final original = (baseModel['merges'] as List).cast<String>();
+        // Convert every OTHER entry to the list shape; leave the rest as strings.
+        final mixed = <dynamic>[
+          for (var i = 0; i < original.length; i++)
+            if (i.isEven) original[i].split(' ') else original[i],
+        ];
+        final mixedModel = Map<String, dynamic>.from(baseModel)
+          ..['merges'] = mixed;
+        final mixedJson = Map<String, dynamic>.from(base)
+          ..['model'] = mixedModel;
+        final mixedTok = HuggingFaceTokenizerLoader.fromJsonString(
+          jsonEncode(mixedJson),
+        );
+
+        for (final piece in ['He', 'll', 'Hell', 'Hello', '▁Hello']) {
+          expect(
+            mixedTok.vocab.getScore(mixedTok.vocab.pieceToId(piece)),
+            closeTo(
+              refTok.vocab.getScore(refTok.vocab.pieceToId(piece)),
+              1e-12,
+            ),
+            reason: 'mixed-shape parity for "$piece"',
+          );
+        }
+      });
+
+      test('skips malformed new-format merge entries instead of throwing', () {
+        // A too-short pair or non-String elements are dropped (mirroring the
+        // legacy branch's skip of a spaceless string), NOT thrown — a corrupt
+        // merge must not take down the whole load.
+        final base = _buildHfBpeJson();
+        final baseModel = base['model'] as Map<String, dynamic>;
+        final withBad = <dynamic>[
+          ['H', 'e'], // valid
+          ['ll'], // too short -> skipped
+          [1, 2], // non-String elements -> skipped
+          ['He', 'll'], // valid
+        ];
+        final model = Map<String, dynamic>.from(baseModel)
+          ..['merges'] = withBad;
+        final json = Map<String, dynamic>.from(base)..['model'] = model;
+
+        final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(
+          jsonEncode(json),
+        );
+
+        // Loads without throwing; the two valid merges still produce their pieces.
+        expect(tokenizer.modelType, ModelType.bpe);
+        expect(tokenizer.vocab.pieceToId('He'), greaterThanOrEqualTo(0));
+        expect(tokenizer.vocab.pieceToId('Hell'), greaterThanOrEqualTo(0));
+      });
 
       test('assigns scores based on merge order', () {
         final json = jsonEncode(_buildHfBpeJson());

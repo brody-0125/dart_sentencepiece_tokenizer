@@ -216,7 +216,9 @@ class HuggingFaceTokenizerLoader {
         // New HuggingFace `tokenizers` format (>= 0.20, used by recent exports
         // such as SigLIP2 and Gemma-2/3): each merge is a two-element
         // `[left, right]` array instead of a single space-joined string.
-        if (raw.length < 2) continue;
+        // Skip a malformed entry rather than throw, mirroring the legacy
+        // branch's `spaceIdx < 0` skip below (both drop a bad merge and move on).
+        if (raw.length < 2 || raw[0] is! String || raw[1] is! String) continue;
         left = raw[0] as String;
         right = raw[1] as String;
       } else {
