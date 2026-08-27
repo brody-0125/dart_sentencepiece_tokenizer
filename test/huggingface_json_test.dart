@@ -254,6 +254,48 @@ void main() {
         expect(tokenizer.modelType, ModelType.bpe);
       });
 
+      test(
+        'accepts new-format merges (list of [left, right] pairs) with score parity',
+        () {
+          // HuggingFace `tokenizers` >= 0.20 (SigLIP2, Gemma-2/3, and other recent
+          // exports) emit `model.merges` as `[[left, right], ...]` arrays instead
+          // of the legacy `"left right"` strings. Both shapes must parse, and to
+          // identical merge scores.
+          final base = _buildHfBpeJson();
+          final refTok = HuggingFaceTokenizerLoader.fromJsonString(
+            jsonEncode(base),
+          );
+
+          final baseModel = base['model'] as Map<String, dynamic>;
+          final listMerges = (baseModel['merges'] as List)
+              .map((m) => (m as String).split(' '))
+              .toList();
+          final newModel = Map<String, dynamic>.from(baseModel)
+            ..['merges'] = listMerges;
+          final newJson = Map<String, dynamic>.from(base)..['model'] = newModel;
+          final newTok = HuggingFaceTokenizerLoader.fromJsonString(
+            jsonEncode(newJson),
+          );
+
+          expect(newTok.modelType, ModelType.bpe);
+          expect(newTok.vocab.size, refTok.vocab.size);
+          // Every merge-derived piece gets the SAME score from either shape.
+          for (final piece in ['He', 'll', 'Hell', 'Hello', '▁Hello']) {
+            final refScore = refTok.vocab.getScore(
+              refTok.vocab.pieceToId(piece),
+            );
+            final newScore = newTok.vocab.getScore(
+              newTok.vocab.pieceToId(piece),
+            );
+            expect(
+              newScore,
+              closeTo(refScore, 1e-12),
+              reason: 'merge-score parity for "$piece"',
+            );
+          }
+        },
+      );
+
       test('assigns scores based on merge order', () {
         final json = jsonEncode(_buildHfBpeJson());
         final tokenizer = HuggingFaceTokenizerLoader.fromJsonString(json);

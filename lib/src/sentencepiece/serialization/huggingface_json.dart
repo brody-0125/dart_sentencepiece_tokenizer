@@ -209,11 +209,24 @@ class HuggingFaceTokenizerLoader {
 
     final mergeScores = <String, double>{};
     for (var i = 0; i < rawMerges.length; i++) {
-      final mergeStr = rawMerges[i] as String;
-      final spaceIdx = mergeStr.indexOf(' ');
-      if (spaceIdx < 0) continue;
-      final left = mergeStr.substring(0, spaceIdx);
-      final right = mergeStr.substring(spaceIdx + 1);
+      final raw = rawMerges[i];
+      final String left;
+      final String right;
+      if (raw is List) {
+        // New HuggingFace `tokenizers` format (>= 0.20, used by recent exports
+        // such as SigLIP2 and Gemma-2/3): each merge is a two-element
+        // `[left, right]` array instead of a single space-joined string.
+        if (raw.length < 2) continue;
+        left = raw[0] as String;
+        right = raw[1] as String;
+      } else {
+        // Legacy format: a single `"left right"` string.
+        final mergeStr = raw as String;
+        final spaceIdx = mergeStr.indexOf(' ');
+        if (spaceIdx < 0) continue;
+        left = mergeStr.substring(0, spaceIdx);
+        right = mergeStr.substring(spaceIdx + 1);
+      }
       mergeScores[left + right] = -i.toDouble();
     }
 
