@@ -1,6 +1,7 @@
 # dart_sentencepiece_tokenizer
 
 ![CI](https://github.com/brody-0125/dart_sentencepiece_tokenizer/actions/workflows/ci.yml/badge.svg)
+[![Pub Monthly Downloads](https://img.shields.io/pub/dm/dart_sentencepiece_tokenizer)](https://pub.dev/packages/dart_sentencepiece_tokenizer)
 ![Dart](https://img.shields.io/badge/Dart-3.10.7+-0175C2.svg?logo=dart)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Compatible-FF6600)
