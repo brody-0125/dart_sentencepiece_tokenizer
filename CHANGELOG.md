@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.3] - 2026-09-02
 
-### Added
+### Fixed
 
-- Support for Hugging Face BPE `merges` entries represented as `[left, right]` pairs (#26).
+- Fixed loading of Hugging Face BPE `merges` entries represented as `[left, right]` pairs (#26).
 
 ### Changed
 

@@ -286,6 +286,7 @@ if (TokenizerJsonLoader.isHuggingFaceFormat(data)) {
 
 **Supported features:**
 - Unigram and BPE model types
+- BPE `merges` entries in both legacy string and `[left, right]` pair formats
 - Special token detection (unk, bos, eos, pad)
 - Normalizer and post-processor inference
 - Byte fallback from decoder configuration
