@@ -7,6 +7,11 @@
 
 A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE (Gemma) and Unigram (Llama) algorithms.
 
+## Contributors
+
+- [Sasha Denisov (@DenisovAV)](https://github.com/DenisovAV)
+- [View all contributors](https://github.com/brody-0125/dart_sentencepiece_tokenizer/graphs/contributors)
+
 ## Features
 
 - **Pure Dart** - Zero dependencies, works everywhere (Flutter, Server, CLI, Web)
@@ -19,7 +24,7 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **HuggingFace Compatible** - JSON serialization, dynamic token addition, tokenize() API
 - **HuggingFace tokenizer.json** - Load tokenizers directly from HuggingFace `tokenizer.json` format
 - **CI/CD** - GitHub Actions with format check, lint, and multi-version testing
-- **Well Tested** - 302+ tests with 100% pass rate
+- **Well Tested** - 331+ tests with 100% pass rate
 
 ## Installation
 
@@ -281,6 +286,7 @@ if (TokenizerJsonLoader.isHuggingFaceFormat(data)) {
 
 **Supported features:**
 - Unigram and BPE model types
+- BPE `merges` entries in both legacy string and `[left, right]` pair formats
 - Special token detection (unk, bos, eos, pad)
 - Normalizer and post-processor inference
 - Byte fallback from decoder configuration
@@ -511,7 +517,7 @@ Download SentencePiece models from HuggingFace:
 ## Testing
 
 ```bash
-# Run all tests (302+ tests)
+# Run all tests (331+ tests)
 dart test
 
 # Run specific test file
