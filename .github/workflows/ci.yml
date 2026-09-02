@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        sdk: [stable, "3.10.7"]
+        sdk: ["3.10.7", "3.10.9", "3.11.6", "3.12.2", "3.13.2", stable]
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
