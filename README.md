@@ -25,7 +25,7 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.3.2
+  dart_sentencepiece_tokenizer: ^1.3.3
 ```
 
 ## Quick Start
