@@ -62,7 +62,12 @@ class ProtobufReader {
 
   int readSignedVarint() {
     final value = readVarint();
-    return (value >> 1) ^ -(value & 1);
+    // SentencePiece trainer IDs are protobuf `int32` fields, not `sint32`
+    // fields. Decode both the compact positive form and sign-extended
+    // negative form without applying ZigZag decoding.
+    if (value <= 0x7FFFFFFF) return value;
+    if (value <= 0xFFFFFFFF) return value - (1 << 32);
+    return value - (1 << 64);
   }
 
   int readFixed32() {
