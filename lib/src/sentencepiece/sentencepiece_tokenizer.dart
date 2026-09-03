@@ -365,6 +365,7 @@ class SentencePieceTokenizer {
         maxLength: _truncationConfig!.maxLength,
         truncateFromEnd:
             _truncationConfig!.direction == SpTruncationDirection.right,
+        preserveSpecialTokens: true,
       );
     }
 
@@ -413,6 +414,7 @@ class SentencePieceTokenizer {
               maxLength: _truncationConfig!.maxLength,
               truncateFromEnd:
                   _truncationConfig!.direction == SpTruncationDirection.right,
+              preserveSpecialTokens: true,
             ),
           )
           .toList();

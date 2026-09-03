@@ -402,37 +402,57 @@ void main() {
       expect(tokenizer.encode('Ａ', addSpecialTokens: false).ids, [5]);
     });
 
-    test('loads tokenizer.json truncation and batch padding settings', () {
-      final json =
-          _xlmTokenizerJson(
-              pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
-              normalizer: _emptyNormalizer,
-              postProcessor: _xlmTemplateProcessor(),
-            )
-            ..['truncation'] = {
-              'max_length': 4,
-              'stride': 0,
-              'strategy': 'LongestFirst',
-            }
-            ..['padding'] = {
-              'strategy': 'BatchLongest',
-              'direction': 'Right',
-              'pad_to_multiple_of': null,
-              'pad_id': 1,
-              'pad_type_id': 0,
-              'pad_token': '<pad>',
-            };
+    test(
+      'loads tokenizer.json truncation and batch padding settings',
+      () async {
+        final json =
+            _xlmTokenizerJson(
+                pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+                normalizer: _emptyNormalizer,
+                postProcessor: _xlmTemplateProcessor(),
+              )
+              ..['truncation'] = {
+                'max_length': 4,
+                'stride': 0,
+                'strategy': 'LongestFirst',
+              }
+              ..['padding'] = {
+                'strategy': 'BatchLongest',
+                'direction': 'Right',
+                'pad_to_multiple_of': null,
+                'pad_id': 1,
+                'pad_type_id': 0,
+                'pad_token': '<pad>',
+              };
 
-      final tokenizer = HuggingFaceTokenizerLoader.fromMap(json);
+        final tokenizer = HuggingFaceTokenizerLoader.fromMap(json);
 
-      expect(tokenizer.truncation!.maxLength, 4);
-      expect(tokenizer.encode('aaaaa').length, 4);
-      final batch = tokenizer.encodeBatch(['a', 'aa']);
-      expect(batch.map((encoding) => encoding.ids.toList()).toList(), [
-        [0, 4, 2, 1],
-        [0, 4, 4, 2],
-      ]);
-    });
+        expect(tokenizer.truncation!.maxLength, 4);
+        expect(tokenizer.encode('aaaaa').ids.toList(), [0, 4, 4, 2]);
+        final batch = tokenizer.encodeBatch(['a', 'aa']);
+        expect(batch.map((encoding) => encoding.ids.toList()).toList(), [
+          [0, 4, 2, 1],
+          [0, 4, 4, 2],
+        ]);
+
+        final truncatedBatch = tokenizer.encodeBatch(['a', 'aaaaa']);
+        expect(
+          truncatedBatch.map((encoding) => encoding.ids.toList()).toList(),
+          [
+            [0, 4, 2, 1],
+            [0, 4, 4, 2],
+          ],
+        );
+
+        final parallelBatch = await tokenizer.encodeBatchParallel(
+          List.filled(8, 'aaaaa'),
+        );
+        expect(
+          parallelBatch.map((encoding) => encoding.ids.toList()).toList(),
+          List.filled(8, [0, 4, 4, 2]),
+        );
+      },
+    );
 
     test('fails on malformed Precompiled base64 instead of ignoring it', () {
       final json = _xlmTokenizerJson(

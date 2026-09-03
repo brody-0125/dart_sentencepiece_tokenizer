@@ -315,12 +315,57 @@ class Encoding {
   Encoding withTruncation({
     required int maxLength,
     bool truncateFromEnd = true,
+    bool preserveSpecialTokens = false,
   }) {
     if (length <= maxLength) {
       return this;
     }
 
     final seqIds = sequenceIds;
+
+    if (preserveSpecialTokens) {
+      final specialCount = specialTokensMask.where((mask) => mask == 1).length;
+      final contentLimit = maxLength > specialCount
+          ? maxLength - specialCount
+          : 0;
+      final contentIndexes = [
+        for (var i = 0; i < length; i++)
+          if (specialTokensMask[i] == 0) i,
+      ];
+      final contentStart = truncateFromEnd
+          ? 0
+          : (contentIndexes.length - contentLimit).clamp(
+              0,
+              contentIndexes.length,
+            );
+      final contentEnd = truncateFromEnd
+          ? contentLimit.clamp(0, contentIndexes.length)
+          : contentIndexes.length;
+      final keptContent = contentIndexes
+          .sublist(contentStart, contentEnd)
+          .toSet();
+
+      final builder = EncodingBuilder();
+      for (var i = 0; i < length; i++) {
+        if (specialTokensMask[i] == 1) {
+          builder.addSpecialToken(
+            token: tokens[i],
+            id: ids[i],
+            typeId: typeIds[i],
+          );
+        } else if (keptContent.contains(i)) {
+          builder.addToken(
+            token: tokens[i],
+            id: ids[i],
+            typeId: typeIds[i],
+            offset: offsets[i],
+            wordId: wordIds[i],
+            sequenceId: seqIds[i],
+          );
+        }
+      }
+      return builder.build();
+    }
 
     if (truncateFromEnd) {
       return Encoding._typed(
