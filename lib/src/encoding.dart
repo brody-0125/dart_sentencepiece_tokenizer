@@ -312,6 +312,12 @@ class Encoding {
     );
   }
 
+  /// Truncate this encoding to at most [maxLength] tokens.
+  ///
+  /// By default, tokens are removed from the end when [truncateFromEnd] is
+  /// true, or from the beginning otherwise. When [preserveSpecialTokens] is
+  /// true, special tokens remain in their original order and [maxLength]
+  /// includes those tokens in its budget.
   Encoding withTruncation({
     required int maxLength,
     bool truncateFromEnd = true,

@@ -6,7 +6,7 @@
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Compatible-FF6600)
 
-A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE (Gemma) and Unigram (Llama) algorithms.
+A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE (Gemma), Unigram (Llama), and SentencePiece-oriented Hugging Face `tokenizer.json` pipelines.
 
 ## Contributors
 
@@ -23,15 +23,15 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **Batch Processing** - Sequential and parallel (Isolate-based) batch encoding
 - **Streaming API** - HuggingFace TextStreamer compatible for real-time LLM output
 - **HuggingFace Compatible** - JSON serialization, dynamic token addition, tokenize() API
-- **HuggingFace tokenizer.json** - Load tokenizers directly from HuggingFace `tokenizer.json` format
+- **HuggingFace tokenizer.json** - Load SentencePiece BPE/Unigram tokenizers, including Precompiled normalizers and Metaspace pipelines
 - **CI/CD** - GitHub Actions with format check, lint, and multi-version testing
-- **Well Tested** - 331+ tests with 100% pass rate
+- **Well Tested** - 354+ tests with 100% pass rate
 
 ## Installation
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.3.3
+  dart_sentencepiece_tokenizer: ^1.4.0
 ```
 
 ## Quick Start
@@ -145,7 +145,10 @@ final tokenizer = SentencePieceTokenizer.fromModelFileSync('model.model')
   ..enableTruncation(maxLength: 512, direction: SpTruncationDirection.right);
 
 // Manual truncation
-final truncated = encoding.withTruncation(maxLength: 64);
+final truncated = encoding.withTruncation(
+  maxLength: 64,
+  preserveSpecialTokens: true,
+);
 
 // Truncation strategies for pairs
 final (truncA, truncB) = Encoding.truncatePair(
@@ -256,9 +259,9 @@ final loadedSync = TokenizerJsonLoader.fromJsonFileSync('tokenizer.json');
 final fromString = TokenizerJsonLoader.fromJsonString(jsonString);
 ```
 
-### HuggingFace tokenizer.json Loading (v1.3.1+)
+### HuggingFace tokenizer.json Loading (v1.3.1+, expanded in v1.4.0)
 
-Load tokenizers directly from HuggingFace `tokenizer.json` format, enabling compatibility with models like Gemma and Llama that distribute tokenizers in this format.
+Load SentencePiece-based tokenizers directly from HuggingFace `tokenizer.json` format, including multilingual models such as XLM-R and MiniLM that distribute their normalizer, pre-tokenizer, and post-processor configuration in JSON.
 
 ```dart
 // Auto-detection via TokenizerJsonLoader (recommended)
@@ -289,9 +292,16 @@ if (TokenizerJsonLoader.isHuggingFaceFormat(data)) {
 - Unigram and BPE model types
 - BPE `merges` entries in both legacy string and `[left, right]` pair formats
 - Special token detection (unk, bos, eos, pad)
-- Normalizer and post-processor inference
+- Direct and nested `Precompiled` normalizers with ordered `Replace` operations
+- `WhitespaceSplit` and `Metaspace` pre-tokenizers, including current and legacy configuration fields
+- `TemplateProcessing` BOS/EOS post-processing with declared special-token IDs
+- Tokenizer-level padding and truncation settings, preserving post-processor special tokens
+- Unigram consecutive unknown-token fusion (`fuse_unk`)
 - Byte fallback from decoder configuration
 - Added tokens beyond base vocabulary
+
+Malformed required precompiled data and unsupported required pipeline components
+fail explicitly instead of silently falling back to identity behavior.
 
 ### Decoding
 
@@ -513,12 +523,12 @@ Download SentencePiece models from HuggingFace:
 
 **Supported formats:**
 - Binary protobuf (`.model` files from SentencePiece C++ library)
-- HuggingFace `tokenizer.json` (auto-detected, v1.3.1+)
+- HuggingFace `tokenizer.json` (auto-detected, v1.3.1+; expanded in v1.4.0)
 
 ## Testing
 
 ```bash
-# Run all tests (331+ tests)
+# Run all tests (354+ tests)
 dart test
 
 # Run specific test file
@@ -529,6 +539,10 @@ dart run benchmark/performance_benchmark.dart
 
 # Run HuggingFace compatibility benchmark
 dart run benchmark/hf_compatibility_benchmark.dart
+
+# Run official Hugging Face tokenizer.json fetch/load coverage
+# Set RUN_HF_NETWORK_TESTS=1 in your shell before running this command.
+dart test test/huggingface_network_test.dart
 
 # Run streaming benchmark
 dart run benchmark/streaming_benchmark.dart

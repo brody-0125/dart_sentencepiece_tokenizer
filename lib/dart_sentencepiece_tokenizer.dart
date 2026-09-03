@@ -1,7 +1,9 @@
 /// Pure Dart SentencePiece tokenizer library.
 ///
-/// Supports BPE (Gemma) and Unigram (Llama) algorithms without any
-/// external dependencies.
+/// Supports BPE (Gemma) and Unigram (Llama) algorithms without any external
+/// dependencies. Hugging Face `tokenizer.json` files can be loaded through
+/// [HuggingFaceTokenizerLoader], including SentencePiece-oriented normalizer,
+/// pre-tokenizer, and post-processor configuration.
 library;
 
 export 'src/encoding.dart' show Encoding, EncodingBuilder, TruncationStrategy;

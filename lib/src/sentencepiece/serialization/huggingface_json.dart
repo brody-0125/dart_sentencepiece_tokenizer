@@ -64,8 +64,12 @@ class _HfMetadata {
 
 /// Loader for HuggingFace `tokenizer.json` format.
 ///
-/// Supports SentencePiece-based BPE and Unigram models as used by
-/// Gemma, Llama, and similar HuggingFace models.
+/// Supports SentencePiece-based BPE and Unigram models as used by Gemma,
+/// Llama, XLM-R, and similar HuggingFace models. The supported
+/// SentencePiece-oriented pipeline includes direct or nested `Precompiled`
+/// normalizers, `Replace` operations, `WhitespaceSplit` and `Metaspace`
+/// pre-tokenizers, added tokens, template special tokens, and tokenizer-level
+/// padding and truncation settings.
 class HuggingFaceTokenizerLoader {
   HuggingFaceTokenizerLoader._();
 

@@ -6,7 +6,7 @@ import '../sentencepiece_tokenizer.dart';
 /// Signature for the callback when finalized text is ready.
 ///
 /// [text] is the decoded text chunk.
-/// [streamEnd] is `true` when this is the final chunk (from [end]).
+/// [streamEnd] is `true` when this is the final chunk (from `end()`).
 typedef OnFinalizedText = void Function(String text, {required bool streamEnd});
 
 /// HuggingFace TextStreamer-compatible streaming decoder.
