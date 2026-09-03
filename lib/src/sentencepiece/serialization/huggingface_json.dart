@@ -32,7 +32,7 @@ class _HfMetadata {
   final int pairEosTokensBetweenSequences;
   final int pairTypeId;
   final int pairSpecialTypeId;
-  final List<_HfAddedToken> addedTokens;
+  final List<SpAddedToken> addedTokens;
   final Set<String> specialContents;
   final List<NormalizerOperation> normalizerOperations;
   final PreTokenizerSpec? preTokenizer;
@@ -59,26 +59,6 @@ class _HfMetadata {
     this.specialContents = const {},
     this.normalizerOperations = const [],
     this.preTokenizer,
-  });
-}
-
-class _HfAddedToken {
-  final int id;
-  final String content;
-  final bool special;
-  final bool singleWord;
-  final bool lstrip;
-  final bool rstrip;
-  final bool normalized;
-
-  const _HfAddedToken({
-    required this.id,
-    required this.content,
-    required this.special,
-    this.singleWord = false,
-    this.lstrip = false,
-    this.rstrip = false,
-    this.normalized = true,
   });
 }
 
@@ -156,18 +136,7 @@ class HuggingFaceTokenizerLoader {
     final tokenizer = SentencePieceTokenizer.fromModel(
       model,
       config: finalConfig,
-      addedTokens: [
-        for (final token in meta.addedTokens)
-          SpAddedToken(
-            id: token.id,
-            content: token.content,
-            special: token.special,
-            singleWord: token.singleWord,
-            lstrip: token.lstrip,
-            rstrip: token.rstrip,
-            normalized: token.normalized,
-          ),
-      ],
+      addedTokens: meta.addedTokens,
     );
 
     _applyAddedTokens(tokenizer, meta, model.vocabSize);
@@ -366,13 +335,13 @@ class HuggingFaceTokenizerLoader {
   }
 
   static _HfMetadata _parseMetadata(Map<String, dynamic> data) {
-    final addedTokens = <_HfAddedToken>[];
+    final addedTokens = <SpAddedToken>[];
     final rawAddedTokens = data['added_tokens'] as List?;
     if (rawAddedTokens != null) {
       for (final raw in rawAddedTokens) {
         final entry = raw as Map<String, dynamic>;
         addedTokens.add(
-          _HfAddedToken(
+          SpAddedToken(
             id: entry['id'] as int,
             content: entry['content'] as String,
             special: entry['special'] as bool? ?? false,

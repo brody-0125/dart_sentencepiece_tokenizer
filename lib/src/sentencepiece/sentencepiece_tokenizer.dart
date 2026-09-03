@@ -1050,7 +1050,6 @@ class SentencePieceTokenizer {
             token: token,
             offset: _sourceOffset(
               chunk.alignment,
-              chars,
               start,
               end,
               leadingMarkerLength: chunk.leadingMarkerLength,
@@ -1316,10 +1315,6 @@ class SentencePieceTokenizer {
             wordIndex++;
           }
           start = end;
-          if (start < transformedChars.length &&
-              _startsWith(transformedChars, start, replacement)) {
-            // The next chunk owns this marker.
-          }
         }
       }
     } else {
@@ -1374,7 +1369,6 @@ class SentencePieceTokenizer {
 
   (int, int) _sourceOffset(
     List<(int, int)?> alignment,
-    List<int> chars,
     int start,
     int end, {
     required int leadingMarkerLength,
