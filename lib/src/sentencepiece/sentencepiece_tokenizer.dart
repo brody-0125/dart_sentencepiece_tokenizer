@@ -111,7 +111,10 @@ class SpAddedToken {
 
 /// Pure Dart SentencePiece tokenizer.
 ///
-/// Supports both BPE (Gemma) and Unigram (Llama) algorithms.
+/// Supports both BPE (Gemma) and Unigram (Llama) algorithms. Instances can be
+/// created from native SentencePiece models or by
+/// `HuggingFaceTokenizerLoader` from a SentencePiece-oriented
+/// `tokenizer.json` file.
 class SentencePieceTokenizer {
   final SpVocabulary vocab;
   final SentencePieceConfig config;

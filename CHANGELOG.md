@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-09-04
+
+### Added
+
+- Expanded Hugging Face `tokenizer.json` compatibility for SentencePiece-based BPE and Unigram tokenizers (#31).
+  - Direct and nested `Precompiled` normalizers with ordered `Replace` operations.
+  - `WhitespaceSplit` and `Metaspace` pre-tokenizer pipelines, including current and legacy configuration fields.
+  - `TemplateProcessing` special tokens with declared BOS/EOS IDs and type IDs.
+  - Tokenizer-level padding and truncation settings, including post-processor special-token preservation.
+  - Unigram consecutive unknown-token fusion (`fuse_unk`) and declared added-token IDs.
+- Added acceptance coverage for official Hugging Face tokenizer.json downloads and MiniLM golden IDs.
+
+### Changed
+
+- Exported `SpAddedToken` for tokenizer JSON metadata interoperability.
+- Added configurable padding type IDs and special-token-aware truncation to `Encoding`.
+
+### Fixed
+
+- Malformed precompiled base64 and charsmap data now fail explicitly instead of being silently ignored.
+- Corrected SentencePiece protobuf `int32` decoding without ZigZag conversion.
+- Preserved BOS/EOS tokens when truncating long single, batch, and parallel-batch encodings.
+
 ## [1.3.3] - 2026-09-02
 
 ### Fixed
