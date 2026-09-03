@@ -12,6 +12,8 @@ class SpNormalizer {
   final bool escapeWhitespaces;
   final String normalizerName;
   final PrecompiledCharsmap? _charsmap;
+  final List<NormalizerOperation> _operations;
+  final Map<int, PrecompiledCharsmap> _compiledOperations = {};
 
   SpNormalizer({
     this.addDummyPrefix = true,
@@ -19,34 +21,94 @@ class SpNormalizer {
     this.escapeWhitespaces = true,
     this.normalizerName = '',
     PrecompiledCharsmap? charsmap,
-  }) : _charsmap = charsmap;
+    List<NormalizerOperation> operations = const [],
+  }) : _charsmap = charsmap,
+       _operations = operations;
 
   factory SpNormalizer.fromSpec(NormalizerSpec spec) {
     PrecompiledCharsmap? charsmap;
-    final charsmapBytes = spec.precompiledCharsmap;
+    final charsmapBytes = spec.operations.isEmpty
+        ? spec.precompiledCharsmap
+        : null;
     if (charsmapBytes != null && charsmapBytes.isNotEmpty) {
       charsmap = PrecompiledCharsmap.fromBytes(charsmapBytes);
     }
-    return SpNormalizer(
+    final normalizer = SpNormalizer(
       addDummyPrefix: spec.addDummyPrefix,
       removeExtraWhitespaces: spec.removeExtraWhitespaces,
       escapeWhitespaces: spec.escapeWhitespaces,
       normalizerName: spec.name,
       charsmap: charsmap,
+      operations: spec.operations,
     );
+    for (var i = 0; i < spec.operations.length; i++) {
+      final operation = spec.operations[i];
+      if (operation.type == 'Precompiled') {
+        final bytes = operation.precompiledCharsmap;
+        if (bytes == null || bytes.isEmpty) {
+          throw const FormatException(
+            'Precompiled normalizer is missing charsmap data',
+          );
+        }
+        normalizer._compiledOperations[i] = PrecompiledCharsmap.fromBytes(
+          bytes,
+        );
+      }
+    }
+    return normalizer;
   }
 
   /// Whether this normalizer has a precompiled charsmap.
-  bool get hasCharsmap => _charsmap != null;
+  bool get hasCharsmap =>
+      _charsmap != null ||
+      _operations.any((operation) => operation.type == 'Precompiled');
+
+  /// Ordered Hugging Face normalizer operations, when present.
+  List<NormalizerOperation> get operations => List.unmodifiable(_operations);
 
   /// Precompiled charsmap bytes for serialization.
   ///
   /// Reconstructed on demand from the parsed trie via [PrecompiledCharsmap.toBytes],
   /// avoiding duplicate storage of both raw bytes and parsed structures.
-  Uint8List? get precompiledCharsmapBytes => _charsmap?.toBytes();
+  Uint8List? get precompiledCharsmapBytes {
+    if (_charsmap != null) return _charsmap.toBytes();
+    for (final operation in _operations) {
+      if (operation.type == 'Precompiled') {
+        return operation.precompiledCharsmap;
+      }
+    }
+    return null;
+  }
 
   String normalize(String text) {
     if (text.isEmpty) return text;
+
+    if (_operations.isNotEmpty) {
+      var result = text;
+      for (var i = 0; i < _operations.length; i++) {
+        final operation = _operations[i];
+        switch (operation.type) {
+          case 'Precompiled':
+            result = _compiledOperations[i]!.normalize(result);
+          case 'Prepend':
+            result = '${operation.replacement ?? ''}$result';
+          case 'Replace':
+            final pattern = operation.pattern;
+            final replacement = operation.replacement;
+            if (pattern == null || replacement == null) {
+              throw const FormatException(
+                'Replace normalizer is missing pattern or replacement',
+              );
+            }
+            result = result.replaceAll(RegExp(pattern), replacement);
+          default:
+            throw UnsupportedError(
+              'Unsupported normalizer operation: ${operation.type}',
+            );
+        }
+      }
+      return result;
+    }
 
     var result = text;
 

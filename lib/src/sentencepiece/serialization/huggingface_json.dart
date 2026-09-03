@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../model/model_proto.dart';
+import '../normalizer/precompiled_charsmap.dart';
 import '../sentencepiece_tokenizer.dart';
 
 /// Known variant strings for each special token type.
@@ -27,8 +29,13 @@ class _HfMetadata {
   final String padPiece;
   final bool addBosToken;
   final bool addEosToken;
-  final List<_HfAddedToken> addedTokens;
+  final int pairEosTokensBetweenSequences;
+  final int pairTypeId;
+  final int pairSpecialTypeId;
+  final List<SpAddedToken> addedTokens;
   final Set<String> specialContents;
+  final List<NormalizerOperation> normalizerOperations;
+  final PreTokenizerSpec? preTokenizer;
 
   const _HfMetadata({
     this.addDummyPrefix = true,
@@ -45,20 +52,13 @@ class _HfMetadata {
     this.padPiece = '<pad>',
     this.addBosToken = false,
     this.addEosToken = false,
+    this.pairEosTokensBetweenSequences = 1,
+    this.pairTypeId = 1,
+    this.pairSpecialTypeId = 1,
     this.addedTokens = const [],
     this.specialContents = const {},
-  });
-}
-
-class _HfAddedToken {
-  final int id;
-  final String content;
-  final bool special;
-
-  const _HfAddedToken({
-    required this.id,
-    required this.content,
-    required this.special,
+    this.normalizerOperations = const [],
+    this.preTokenizer,
   });
 }
 
@@ -90,7 +90,15 @@ class HuggingFaceTokenizerLoader {
       );
     }
 
-    final modelType = modelData['type'] as String?;
+    // Some official SentencePiece exports omit `model.type`; the vocab shape
+    // still unambiguously identifies Unigram (array) versus BPE (map).
+    final modelType =
+        modelData['type'] as String? ??
+        switch (modelData['vocab']) {
+          final List<dynamic> vocab when vocab.isNotEmpty => 'Unigram',
+          final Map<String, dynamic> vocab when vocab.isNotEmpty => 'BPE',
+          _ => null,
+        };
     if (modelType == null) {
       throw const FormatException(
         'Missing model type in HuggingFace tokenizer JSON',
@@ -106,6 +114,9 @@ class HuggingFaceTokenizerLoader {
       finalConfig = SentencePieceConfig(
         addBosToken: meta.addBosToken,
         addEosToken: meta.addEosToken,
+        pairEosTokensBetweenSequences: meta.pairEosTokensBetweenSequences,
+        pairTypeId: meta.pairTypeId,
+        pairSpecialTypeId: meta.pairSpecialTypeId,
       );
     }
 
@@ -125,9 +136,11 @@ class HuggingFaceTokenizerLoader {
     final tokenizer = SentencePieceTokenizer.fromModel(
       model,
       config: finalConfig,
+      addedTokens: meta.addedTokens,
     );
 
     _applyAddedTokens(tokenizer, meta, model.vocabSize);
+    _applyTokenizerSettings(tokenizer, data);
 
     return tokenizer;
   }
@@ -189,8 +202,10 @@ class HuggingFaceTokenizerLoader {
         pieces.length,
         unkId,
         meta.byteFallback,
+        modelData['fuse_unk'] as bool? ?? true,
       ),
       normalizerSpec: _buildNormalizerSpec(meta),
+      preTokenizerSpec: meta.preTokenizer,
     );
   }
 
@@ -278,8 +293,10 @@ class HuggingFaceTokenizerLoader {
         vocabSize,
         unkId,
         byteFallback,
+        false,
       ),
       normalizerSpec: _buildNormalizerSpec(meta),
+      preTokenizerSpec: meta.preTokenizer,
     );
   }
 
@@ -289,6 +306,7 @@ class HuggingFaceTokenizerLoader {
     int vocabSize,
     int unkId,
     bool byteFallback,
+    bool fuseUnk,
   ) {
     return TrainerSpec(
       modelType: modelType,
@@ -302,6 +320,7 @@ class HuggingFaceTokenizerLoader {
       eosPiece: meta.eosPiece,
       padPiece: meta.padPiece,
       byteFallback: byteFallback,
+      fuseUnk: fuseUnk,
     );
   }
 
@@ -311,20 +330,25 @@ class HuggingFaceTokenizerLoader {
       addDummyPrefix: meta.addDummyPrefix,
       removeExtraWhitespaces: meta.removeExtraWhitespaces,
       escapeWhitespaces: meta.escapeWhitespaces,
+      operations: meta.normalizerOperations,
     );
   }
 
   static _HfMetadata _parseMetadata(Map<String, dynamic> data) {
-    final addedTokens = <_HfAddedToken>[];
+    final addedTokens = <SpAddedToken>[];
     final rawAddedTokens = data['added_tokens'] as List?;
     if (rawAddedTokens != null) {
       for (final raw in rawAddedTokens) {
         final entry = raw as Map<String, dynamic>;
         addedTokens.add(
-          _HfAddedToken(
+          SpAddedToken(
             id: entry['id'] as int,
             content: entry['content'] as String,
             special: entry['special'] as bool? ?? false,
+            singleWord: entry['single_word'] as bool? ?? false,
+            lstrip: entry['lstrip'] as bool? ?? false,
+            rstrip: entry['rstrip'] as bool? ?? false,
+            normalized: entry['normalized'] as bool? ?? true,
           ),
         );
       }
@@ -360,17 +384,18 @@ class HuggingFaceTokenizerLoader {
       }
     }
 
-    // Parse normalizer settings.
-    bool addDummyPrefix = true;
-    bool escapeWhitespaces = true;
-    bool removeExtraWhitespaces = false;
-
     final normalizerData = data['normalizer'] as Map<String, dynamic>?;
-    if (normalizerData != null) {
-      final parsed = _parseNormalizerFlags(normalizerData);
-      addDummyPrefix = parsed.addDummyPrefix;
-      escapeWhitespaces = parsed.escapeWhitespaces;
-      removeExtraWhitespaces = parsed.removeExtraWhitespaces;
+    final normalizer = _parseNormalizer(normalizerData);
+    final preTokenizer = _parsePreTokenizer(
+      data['pre_tokenizer'] as Map<String, dynamic>?,
+    );
+    var addDummyPrefix = normalizer.addDummyPrefix;
+    var escapeWhitespaces = normalizer.escapeWhitespaces;
+    if (preTokenizer?.useMetaspace == true) {
+      // Metaspace owns whitespace markers. Keep the decoder's unescape
+      // behavior, and remove its leading marker when prefixing is enabled.
+      escapeWhitespaces = true;
+      if (preTokenizer!.addPrefixSpace) addDummyPrefix = true;
     }
 
     bool byteFallback = false;
@@ -381,17 +406,23 @@ class HuggingFaceTokenizerLoader {
 
     bool addBosToken = false;
     bool addEosToken = false;
+    var pairEosTokensBetweenSequences = 1;
+    var pairTypeId = 1;
+    var pairSpecialTypeId = 1;
     final postProcessor = data['post_processor'] as Map<String, dynamic>?;
     if (postProcessor != null) {
       final parsed = _parsePostProcessor(postProcessor, bosPiece, eosPiece);
       addBosToken = parsed.$1;
       addEosToken = parsed.$2;
+      pairEosTokensBetweenSequences = parsed.$3;
+      pairTypeId = parsed.$4;
+      pairSpecialTypeId = parsed.$5;
     }
 
     return _HfMetadata(
       addDummyPrefix: addDummyPrefix,
       escapeWhitespaces: escapeWhitespaces,
-      removeExtraWhitespaces: removeExtraWhitespaces,
+      removeExtraWhitespaces: normalizer.removeExtraWhitespaces,
       byteFallback: byteFallback,
       unkId: unkId,
       bosId: bosId,
@@ -403,8 +434,13 @@ class HuggingFaceTokenizerLoader {
       padPiece: padPiece,
       addBosToken: addBosToken,
       addEosToken: addEosToken,
+      pairEosTokensBetweenSequences: pairEosTokensBetweenSequences,
+      pairTypeId: pairTypeId,
+      pairSpecialTypeId: pairSpecialTypeId,
       addedTokens: addedTokens,
       specialContents: specialContents,
+      normalizerOperations: normalizer.operations,
+      preTokenizer: preTokenizer,
     );
   }
 
@@ -412,39 +448,218 @@ class HuggingFaceTokenizerLoader {
     bool addDummyPrefix,
     bool escapeWhitespaces,
     bool removeExtraWhitespaces,
+    List<NormalizerOperation> operations,
   })
-  _parseNormalizerFlags(Map<String, dynamic> data) {
-    bool addDummyPrefix = false;
-    bool escapeWhitespaces = false;
-    bool removeExtraWhitespaces = false;
+  _parseNormalizer(Map<String, dynamic>? data) {
+    if (data == null) {
+      return (
+        addDummyPrefix: true,
+        escapeWhitespaces: true,
+        removeExtraWhitespaces: false,
+        operations: const [],
+      );
+    }
 
-    final type = data['type'] as String?;
+    var addDummyPrefix = false;
+    var escapeWhitespaces = false;
+    const removeExtraWhitespaces = false;
+    final operations = <NormalizerOperation>[];
 
-    if (type == 'Sequence') {
-      final normalizers = data['normalizers'] as List? ?? [];
-      for (final raw in normalizers) {
-        final n = raw as Map<String, dynamic>;
-        final flags = _parseNormalizerFlags(n);
-        if (flags.addDummyPrefix) addDummyPrefix = true;
-        if (flags.escapeWhitespaces) escapeWhitespaces = true;
-        if (flags.removeExtraWhitespaces) removeExtraWhitespaces = true;
-      }
-    } else if (type == 'Prepend') {
-      final prepend = data['prepend'] as String?;
-      if (prepend == '\u2581' || prepend == ' ') {
-        addDummyPrefix = true;
-      }
-    } else if (type == 'Replace') {
-      final content = data['content'] as String?;
-      if (content == '\u2581') {
-        escapeWhitespaces = true;
+    void visit(Map<String, dynamic> normalizer) {
+      final type = normalizer['type'] as String?;
+      switch (type) {
+        case 'Sequence':
+          final rawNormalizers = normalizer['normalizers'];
+          if (rawNormalizers is! List) {
+            throw const FormatException(
+              'Normalizer Sequence is missing normalizers',
+            );
+          }
+          for (final raw in rawNormalizers) {
+            if (raw is! Map<String, dynamic>) {
+              throw const FormatException(
+                'Normalizer operation must be an object',
+              );
+            }
+            visit(raw);
+          }
+        case 'Precompiled':
+          final encoded = normalizer['precompiled_charsmap'];
+          if (encoded is! String || encoded.isEmpty) {
+            throw const FormatException(
+              'Precompiled normalizer is missing precompiled_charsmap',
+            );
+          }
+          final bytes = _decodeCharsmap(encoded);
+          // Validate at load time so malformed data cannot degrade to identity.
+          PrecompiledCharsmap.fromBytes(bytes);
+          operations.add(
+            NormalizerOperation(
+              type: 'Precompiled',
+              precompiledCharsmap: bytes,
+            ),
+          );
+        case 'Prepend':
+          final prepend = normalizer['prepend'];
+          if (prepend is! String) {
+            throw const FormatException(
+              'Prepend normalizer is missing prepend',
+            );
+          }
+          if (prepend == '\u2581' || prepend == ' ') addDummyPrefix = true;
+          operations.add(
+            NormalizerOperation(type: 'Prepend', replacement: prepend),
+          );
+        case 'Replace':
+          final pattern = _parseReplacePattern(normalizer['pattern']);
+          final replacement = normalizer['content'];
+          if (replacement is! String) {
+            throw const FormatException(
+              'Replace normalizer is missing string content',
+            );
+          }
+          try {
+            RegExp(pattern);
+          } on FormatException catch (error) {
+            throw FormatException('Invalid Replace normalizer pattern: $error');
+          }
+          if (replacement == '\u2581') escapeWhitespaces = true;
+          operations.add(
+            NormalizerOperation(
+              type: 'Replace',
+              pattern: pattern,
+              replacement: replacement,
+            ),
+          );
+        default:
+          throw UnsupportedError('Unsupported Hugging Face normalizer: $type');
       }
     }
 
+    visit(data);
+
+    // Keep the legacy flag implementation for old JSON pipelines. Once a
+    // Precompiled step exists, every supported step must run in JSON order.
+    final hasPrecompiled = operations.any(
+      (operation) => operation.type == 'Precompiled',
+    );
     return (
       addDummyPrefix: addDummyPrefix,
       escapeWhitespaces: escapeWhitespaces,
       removeExtraWhitespaces: removeExtraWhitespaces,
+      operations: hasPrecompiled ? List.unmodifiable(operations) : const [],
+    );
+  }
+
+  static Uint8List _decodeCharsmap(String encoded) {
+    try {
+      return base64Decode(encoded);
+    } on FormatException catch (error) {
+      throw FormatException('Invalid Precompiled charsmap base64: $error');
+    }
+  }
+
+  static String _parseReplacePattern(Object? rawPattern) {
+    if (rawPattern is! Map<String, dynamic>) {
+      throw const FormatException('Replace normalizer is missing pattern');
+    }
+    final regex = rawPattern['Regex'];
+    if (regex is String) return regex;
+    final string = rawPattern['String'];
+    if (string is String) return RegExp.escape(string);
+    throw UnsupportedError(
+      'Unsupported Hugging Face Replace pattern; expected Regex or String',
+    );
+  }
+
+  static PreTokenizerSpec? _parsePreTokenizer(Map<String, dynamic>? data) {
+    if (data == null) return null;
+
+    final type = data['type'] as String?;
+    switch (type) {
+      case 'Metaspace':
+        return _parseMetaspace(data);
+      case 'WhitespaceSplit':
+        return const PreTokenizerSpec(
+          whitespaceSplit: true,
+          useMetaspace: false,
+        );
+      case 'Sequence':
+        final rawPreTokenizers = data['pretokenizers'];
+        if (rawPreTokenizers is! List) {
+          throw const FormatException(
+            'Pre-tokenizer Sequence is missing pretokenizers',
+          );
+        }
+        var whitespaceSplit = false;
+        PreTokenizerSpec? metaspace;
+        for (final raw in rawPreTokenizers) {
+          if (raw is! Map<String, dynamic>) {
+            throw const FormatException(
+              'Pre-tokenizer operation must be an object',
+            );
+          }
+          final childType = raw['type'] as String?;
+          if (childType == 'WhitespaceSplit') {
+            if (metaspace != null) {
+              throw UnsupportedError(
+                'WhitespaceSplit after Metaspace is unsupported',
+              );
+            }
+            whitespaceSplit = true;
+          } else if (childType == 'Metaspace') {
+            if (metaspace != null) {
+              throw UnsupportedError(
+                'Multiple Metaspace pre-tokenizers are unsupported',
+              );
+            }
+            metaspace = _parseMetaspace(raw);
+          } else {
+            throw UnsupportedError(
+              'Unsupported Hugging Face pre-tokenizer: $childType',
+            );
+          }
+        }
+        if (metaspace == null) {
+          return PreTokenizerSpec(
+            whitespaceSplit: whitespaceSplit,
+            useMetaspace: false,
+          );
+        }
+        return PreTokenizerSpec(
+          whitespaceSplit: whitespaceSplit,
+          useMetaspace: true,
+          addPrefixSpace: metaspace.addPrefixSpace,
+          replacement: metaspace.replacement,
+          split: metaspace.split,
+        );
+      default:
+        throw UnsupportedError('Unsupported Hugging Face pre-tokenizer: $type');
+    }
+  }
+
+  static PreTokenizerSpec _parseMetaspace(Map<String, dynamic> data) {
+    final replacement = data['replacement'] as String? ?? '\u2581';
+    if (replacement.isEmpty) {
+      throw const FormatException('Metaspace replacement must not be empty');
+    }
+
+    final legacyPrefix = data['add_prefix_space'] as bool?;
+    final scheme = data['prepend_scheme'] as String?;
+    final addPrefixSpace =
+        legacyPrefix ??
+        switch (scheme) {
+          null || 'always' || 'first' => true,
+          'never' => false,
+          _ => throw UnsupportedError(
+            'Unsupported Metaspace prepend_scheme: $scheme',
+          ),
+        };
+
+    return PreTokenizerSpec(
+      addPrefixSpace: addPrefixSpace,
+      replacement: replacement,
+      split: data['split'] as bool? ?? true,
     );
   }
 
@@ -460,16 +675,19 @@ class HuggingFaceTokenizerLoader {
     return false;
   }
 
-  static (bool, bool) _parsePostProcessor(
+  static (bool, bool, int, int, int) _parsePostProcessor(
     Map<String, dynamic> data,
     String bosPiece,
     String eosPiece,
   ) {
     final type = data['type'] as String?;
-    if (type != 'TemplateProcessing') return (false, false);
+    if (type != 'TemplateProcessing') return (false, false, 1, 1, 1);
 
     bool addBos = false;
     bool addEos = false;
+    var pairEosCount = 0;
+    var pairTypeId = 1;
+    var pairSpecialTypeId = 1;
 
     final single = data['single'] as List?;
     if (single != null && single.isNotEmpty) {
@@ -487,7 +705,25 @@ class HuggingFaceTokenizerLoader {
       }
     }
 
-    return (addBos, addEos);
+    final pair = data['pair'] as List?;
+    if (pair != null) {
+      for (final raw in pair) {
+        if (raw is! Map<String, dynamic>) continue;
+        final sequence = raw['Sequence'];
+        if (sequence is Map<String, dynamic> && sequence['id'] == 'B') {
+          pairTypeId = sequence['type_id'] as int? ?? pairTypeId;
+        }
+        final special = raw['SpecialToken'];
+        if (special is Map<String, dynamic> && special['id'] == eosPiece) {
+          pairEosCount++;
+          pairSpecialTypeId = special['type_id'] as int? ?? pairSpecialTypeId;
+        }
+      }
+    }
+
+    final finalEosCount = addEos && pairEosCount > 0 ? 1 : 0;
+    final eosBetween = pair == null ? 1 : pairEosCount - finalEosCount;
+    return (addBos, addEos, eosBetween, pairTypeId, pairSpecialTypeId);
   }
 
   static void _applyAddedTokens(
@@ -495,20 +731,90 @@ class HuggingFaceTokenizerLoader {
     _HfMetadata meta,
     int baseVocabSize,
   ) {
-    final normalTokens = <String>[];
-    for (final token in meta.addedTokens) {
+    final sortedTokens = [...meta.addedTokens]
+      ..sort((a, b) => a.id.compareTo(b.id));
+    for (final token in sortedTokens) {
       if (token.id < baseVocabSize && tokenizer.vocab.contains(token.content)) {
         continue;
       }
-      if (token.special) {
-        tokenizer.vocab.addSpecialToken(token.content);
-      } else {
-        normalTokens.add(token.content);
+      tokenizer.vocab.addTokenAtId(
+        token.content,
+        token.id,
+        special: token.special,
+      );
+    }
+  }
+
+  static void _applyTokenizerSettings(
+    SentencePieceTokenizer tokenizer,
+    Map<String, dynamic> data,
+  ) {
+    final truncation = data['truncation'];
+    if (truncation is Map<String, dynamic>) {
+      final maxLength = truncation['max_length'];
+      if (maxLength is! int || maxLength <= 0) {
+        throw const FormatException(
+          'Hugging Face truncation is missing a positive max_length',
+        );
       }
+      final stride = truncation['stride'] as int? ?? 0;
+      if (stride != 0) {
+        throw UnsupportedError(
+          'Hugging Face truncation stride is unsupported: $stride',
+        );
+      }
+      tokenizer.enableTruncation(
+        maxLength: maxLength,
+        direction: _parseTruncationDirection(truncation['direction']),
+        strategy: _parseTruncationStrategy(truncation['strategy']),
+      );
     }
-    if (normalTokens.isNotEmpty) {
-      tokenizer.vocab.addTokens(normalTokens);
+
+    final padding = data['padding'];
+    if (padding is Map<String, dynamic>) {
+      tokenizer.enablePadding(
+        direction: _parsePaddingDirection(padding['direction']),
+        length: padding['length'] as int?,
+        padToMultipleOf: padding['pad_to_multiple_of'] as int?,
+        padTokenId: padding['pad_id'] as int?,
+        padToken: padding['pad_token'] as String?,
+        padTypeId: padding['pad_type_id'] as int? ?? 0,
+      );
     }
+  }
+
+  static SpPaddingDirection _parsePaddingDirection(Object? value) {
+    return switch (value?.toString().toLowerCase()) {
+      'left' => SpPaddingDirection.left,
+      null || 'right' => SpPaddingDirection.right,
+      final direction => throw UnsupportedError(
+        'Unsupported Hugging Face padding direction: $direction',
+      ),
+    };
+  }
+
+  static SpTruncationDirection _parseTruncationDirection(Object? value) {
+    return switch (value?.toString().toLowerCase()) {
+      'left' => SpTruncationDirection.left,
+      null || 'right' => SpTruncationDirection.right,
+      final direction => throw UnsupportedError(
+        'Unsupported Hugging Face truncation direction: $direction',
+      ),
+    };
+  }
+
+  static TruncationStrategy _parseTruncationStrategy(Object? value) {
+    return switch (value?.toString().toLowerCase()) {
+      null ||
+      'longestfirst' ||
+      'longest_first' => TruncationStrategy.longestFirst,
+      'onlyfirst' || 'only_first' => TruncationStrategy.onlyFirst,
+      'onlysecond' || 'only_second' => TruncationStrategy.onlySecond,
+      'donottruncate' || 'do_not_truncate' => TruncationStrategy.doNotTruncate,
+      final strategy => throw UnsupportedError(
+        'Unsupported Hugging Face truncation strategy: $strategy',
+      ),
+    };
   }
 
   static bool _isByteToken(String piece) {

@@ -60,16 +60,43 @@ extension SentencePieceTokenizerJson on SentencePieceTokenizer {
         'remove_extra_whitespaces': normalizer.removeExtraWhitespaces,
         'escape_whitespaces': normalizer.escapeWhitespaces,
         'normalizer_name': normalizer.normalizerName,
-        if (normalizer.hasCharsmap)
+        if (normalizer.hasCharsmap && normalizer.operations.isEmpty)
           'precompiled_charsmap': base64Encode(
             normalizer.precompiledCharsmapBytes!,
           ),
+        if (normalizer.operations.isNotEmpty)
+          'operations': [
+            for (final operation in normalizer.operations)
+              {
+                'type': operation.type,
+                if (operation.precompiledCharsmap != null)
+                  'precompiled_charsmap': base64Encode(
+                    operation.precompiledCharsmap!,
+                  ),
+                if (operation.pattern != null) 'pattern': operation.pattern,
+                if (operation.replacement != null)
+                  'replacement': operation.replacement,
+              },
+          ],
       },
       'config': {
         'add_bos_token': config.addBosToken,
         'add_eos_token': config.addEosToken,
+        'pair_eos_tokens_between_sequences':
+            config.pairEosTokensBetweenSequences,
+        'pair_type_id': config.pairTypeId,
+        'pair_special_type_id': config.pairSpecialTypeId,
       },
       'byte_fallback': vocab.hasByteFallback,
+      'fuse_unk': fuseUnknownTokens,
+      if (preTokenizer != null)
+        'pre_tokenizer': {
+          'whitespace_split': preTokenizer!.whitespaceSplit,
+          'use_metaspace': preTokenizer!.useMetaspace,
+          'add_prefix_space': preTokenizer!.addPrefixSpace,
+          'replacement': preTokenizer!.replacement,
+          'split': preTokenizer!.split,
+        },
     };
   }
 }
@@ -84,7 +111,14 @@ class TokenizerJsonLoader {
   /// Check if a parsed JSON map is in HuggingFace tokenizer.json format.
   static bool isHuggingFaceFormat(Map<String, dynamic> data) {
     final model = data['model'];
-    return model is Map<String, dynamic> && model.containsKey('type');
+    if (model is! Map<String, dynamic>) return false;
+    if (model.containsKey('type')) return true;
+
+    // Some official Unigram/BPE exports omit `model.type`; their non-empty
+    // vocab shape is enough for HuggingFaceTokenizerLoader to infer it.
+    final vocab = model['vocab'];
+    return vocab is List && vocab.isNotEmpty ||
+        vocab is Map<String, dynamic> && vocab.isNotEmpty;
   }
 
   /// Create tokenizer from JSON string.
@@ -192,7 +226,54 @@ class TokenizerJsonLoader {
     Uint8List? precompiledCharsmap;
     final charsmapB64 = normalizerData['precompiled_charsmap'] as String?;
     if (charsmapB64 != null) {
-      precompiledCharsmap = base64Decode(charsmapB64);
+      try {
+        precompiledCharsmap = base64Decode(charsmapB64);
+      } on FormatException catch (error) {
+        throw FormatException('Invalid precompiled charsmap base64: $error');
+      }
+    }
+
+    final operations = <NormalizerOperation>[];
+    final rawOperations = normalizerData['operations'] as List?;
+    if (rawOperations != null) {
+      for (final raw in rawOperations) {
+        final operation = raw as Map<String, dynamic>;
+        final type = operation['type'] as String?;
+        if (type == null) {
+          throw const FormatException('Normalizer operation is missing type');
+        }
+        Uint8List? operationBytes;
+        final operationB64 = operation['precompiled_charsmap'] as String?;
+        if (operationB64 != null) {
+          try {
+            operationBytes = base64Decode(operationB64);
+          } on FormatException catch (error) {
+            throw FormatException(
+              'Invalid precompiled charsmap base64: $error',
+            );
+          }
+        }
+        operations.add(
+          NormalizerOperation(
+            type: type,
+            precompiledCharsmap: operationBytes,
+            pattern: operation['pattern'] as String?,
+            replacement: operation['replacement'] as String?,
+          ),
+        );
+      }
+    }
+
+    PreTokenizerSpec? preTokenizer;
+    final preTokenizerData = data['pre_tokenizer'] as Map<String, dynamic>?;
+    if (preTokenizerData != null) {
+      preTokenizer = PreTokenizerSpec(
+        whitespaceSplit: preTokenizerData['whitespace_split'] as bool? ?? false,
+        useMetaspace: preTokenizerData['use_metaspace'] as bool? ?? true,
+        addPrefixSpace: preTokenizerData['add_prefix_space'] as bool? ?? true,
+        replacement: preTokenizerData['replacement'] as String? ?? '\u2581',
+        split: preTokenizerData['split'] as bool? ?? true,
+      );
     }
 
     // Parse byte fallback
@@ -208,6 +289,10 @@ class TokenizerJsonLoader {
         finalConfig = SentencePieceConfig(
           addBosToken: configData['add_bos_token'] as bool? ?? false,
           addEosToken: configData['add_eos_token'] as bool? ?? false,
+          pairEosTokensBetweenSequences:
+              configData['pair_eos_tokens_between_sequences'] as int? ?? 1,
+          pairTypeId: configData['pair_type_id'] as int? ?? 1,
+          pairSpecialTypeId: configData['pair_special_type_id'] as int? ?? 1,
         );
       } else {
         finalConfig = const SentencePieceConfig();
@@ -241,14 +326,20 @@ class TokenizerJsonLoader {
         eosPiece: eosData['piece'] as String,
         padPiece: padData['piece'] as String,
         byteFallback: byteFallback,
+        fuseUnk: data['fuse_unk'] as bool? ?? false,
       ),
       normalizerSpec: NormalizerSpec(
         name: normalizerName,
-        precompiledCharsmap: precompiledCharsmap,
+        precompiledCharsmap:
+            operations.any((operation) => operation.type == 'Precompiled')
+            ? null
+            : precompiledCharsmap,
         addDummyPrefix: addDummyPrefix,
         removeExtraWhitespaces: removeExtraWhitespaces,
         escapeWhitespaces: escapeWhitespaces,
+        operations: operations,
       ),
+      preTokenizerSpec: preTokenizer,
     );
 
     // Create tokenizer using internal factory

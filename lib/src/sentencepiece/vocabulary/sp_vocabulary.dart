@@ -246,6 +246,49 @@ class SpVocabulary {
     return id;
   }
 
+  /// Add a tokenizer.json token while preserving its declared ID.
+  void addTokenAtId(
+    String token,
+    int id, {
+    bool special = false,
+    double score = 0.0,
+  }) {
+    if (id < 0) throw ArgumentError.value(id, 'id');
+    final existingId = _pieceToId[token];
+    if (existingId != null && existingId != id) {
+      throw FormatException(
+        'Added token $token has conflicting IDs: $existingId and $id',
+      );
+    }
+
+    if (id >= _idToPiece.length) {
+      final newSize = id + 1;
+      final expandedScores = Float32List(newSize);
+      expandedScores.setRange(0, _scores.length, _scores);
+      final expandedTypes = Uint8List(newSize);
+      expandedTypes.setRange(0, _types.length, _types);
+      _scores = expandedScores;
+      _types = expandedTypes;
+      _idToPiece.addAll(List<String>.filled(newSize - _idToPiece.length, ''));
+    }
+
+    final existingPiece = _idToPiece[id];
+    if (existingPiece.isNotEmpty && existingPiece != token) {
+      throw FormatException(
+        'Added token ID $id is already used by $existingPiece',
+      );
+    }
+    _pieceToId[token] = id;
+    _idToPiece[id] = token;
+    _scores[id] = score;
+    _types[id] = special
+        ? PieceType.control.value
+        : PieceType.userDefined.value;
+    _trie.insert(token, id);
+    _addedTokenIds.add(id);
+    if (special) _addedSpecialTokenIds.add(id);
+  }
+
   /// Get all dynamically added tokens.
   Map<String, int> getAddedVocab() {
     final result = <String, int>{};

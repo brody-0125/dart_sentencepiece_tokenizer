@@ -10,6 +10,7 @@ export 'src/sentencepiece/sentencepiece_tokenizer.dart'
     show
         SentencePieceTokenizer,
         SentencePieceConfig,
+        SpAddedToken,
         SpPaddingConfig,
         SpPaddingDirection,
         SpTruncationConfig,
