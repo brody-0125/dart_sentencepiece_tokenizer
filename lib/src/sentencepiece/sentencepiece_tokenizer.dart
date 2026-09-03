@@ -83,9 +83,19 @@ class SentencePieceTokenizer {
   final SpNormalizer _normalizer;
   final TokenizationAlgorithm _algorithm;
   final ModelType modelType;
+  final PreTokenizerSpec? _preTokenizer;
 
   /// Access normalizer for serialization.
   SpNormalizer get normalizer => _normalizer;
+
+  /// Access the configured pre-tokenizer, when the source JSON defines one.
+  PreTokenizerSpec? get preTokenizer => _preTokenizer;
+
+  /// Whether this Unigram model fuses consecutive unknown tokens.
+  bool get fuseUnknownTokens {
+    final algorithm = _algorithm;
+    return algorithm is UnigramAlgorithm && algorithm.fuseUnk;
+  }
 
   SpPaddingConfig? _paddingConfig;
   SpTruncationConfig? _truncationConfig;
@@ -96,8 +106,10 @@ class SentencePieceTokenizer {
     required SpNormalizer normalizer,
     required TokenizationAlgorithm algorithm,
     required this.modelType,
+    required PreTokenizerSpec? preTokenizer,
   }) : _normalizer = normalizer,
-       _algorithm = algorithm;
+       _algorithm = algorithm,
+       _preTokenizer = preTokenizer;
 
   /// Load tokenizer from a .model file asynchronously.
   static Future<SentencePieceTokenizer> fromModelFile(
@@ -141,6 +153,7 @@ class SentencePieceTokenizer {
       normalizer: normalizer,
       algorithm: algorithm,
       modelType: model.trainerSpec.modelType,
+      preTokenizer: model.preTokenizerSpec,
     );
   }
 
@@ -165,7 +178,11 @@ class SentencePieceTokenizer {
       case ModelType.bpe:
         return BpeAlgorithm(vocab: vocab, byteFallback: byteFallback);
       case ModelType.unigram:
-        return UnigramAlgorithm(vocab: vocab, byteFallback: byteFallback);
+        return UnigramAlgorithm(
+          vocab: vocab,
+          byteFallback: byteFallback,
+          fuseUnk: model.trainerSpec.fuseUnk,
+        );
       default:
         throw UnsupportedError(
           'Unsupported model type: ${model.trainerSpec.modelType}',
@@ -255,7 +272,7 @@ class SentencePieceTokenizer {
     final normalized = _normalizer.normalize(text);
 
     // Tokenize
-    final tokenIds = _algorithm.tokenize(normalized);
+    final tokenIds = _tokenizeWithPipeline(normalized);
 
     // Build encoding
     final builder = EncodingBuilder();
@@ -521,7 +538,7 @@ class SentencePieceTokenizer {
     required int sequenceId,
   }) {
     final normalized = _normalizer.normalize(text);
-    final tokenIds = _algorithm.tokenize(normalized);
+    final tokenIds = _tokenizeWithPipeline(normalized);
 
     final builder = EncodingBuilder();
     var charPos = 0;
@@ -895,9 +912,64 @@ class SentencePieceTokenizer {
     }
 
     final normalized = _normalizer.normalize(text);
-    final tokenIds = _algorithm.tokenize(normalized);
+    final tokenIds = _tokenizeWithPipeline(normalized);
 
     return [for (final id in tokenIds) vocab.idToPiece(id)];
+  }
+
+  List<int> _tokenizeWithPipeline(String normalized) {
+    final spec = _preTokenizer;
+    if (spec == null) return _algorithm.tokenize(normalized);
+
+    final chunks = <String>[];
+    if (spec.whitespaceSplit) {
+      final startsWithWhitespace = RegExp(r'^\s').hasMatch(normalized);
+      final words = normalized
+          .split(RegExp(r'\s+'))
+          .where((word) => word.isNotEmpty);
+      var wordIndex = 0;
+      for (var word in words) {
+        if (spec.useMetaspace && word.startsWith(spec.replacement)) {
+          word = word.substring(spec.replacement.length);
+        }
+        final addMarker =
+            spec.addPrefixSpace ||
+            wordIndex > 0 ||
+            (wordIndex == 0 && startsWithWhitespace);
+        chunks.add(
+          spec.useMetaspace && addMarker ? '${spec.replacement}$word' : word,
+        );
+        wordIndex++;
+      }
+    } else if (spec.useMetaspace) {
+      var text = normalized.replaceAll(RegExp(r'\s'), spec.replacement);
+      if (spec.addPrefixSpace &&
+          text.isNotEmpty &&
+          !text.startsWith(spec.replacement)) {
+        text = '${spec.replacement}$text';
+      }
+
+      if (spec.split) {
+        final parts = text.split(spec.replacement);
+        chunks.addAll([
+          for (var i = 0; i < parts.length; i++)
+            if (parts[i].isNotEmpty)
+              (i > 0 || text.startsWith(spec.replacement)
+                  ? '${spec.replacement}${parts[i]}'
+                  : parts[i]),
+        ]);
+      } else {
+        chunks.add(text);
+      }
+    } else {
+      chunks.add(normalized);
+    }
+
+    final tokenIds = <int>[];
+    for (final chunk in chunks) {
+      tokenIds.addAll(_algorithm.tokenize(chunk));
+    }
+    return tokenIds;
   }
 
   /// Tokenize multiple texts.
@@ -924,12 +996,23 @@ class _SerializableModelData {
   final String eosPiece;
   final String padPiece;
   final bool byteFallback;
+  final bool fuseUnk;
   final ModelType modelType;
   final bool addDummyPrefix;
   final bool removeExtraWhitespaces;
   final bool escapeWhitespaces;
   final String normalizerName;
   final Uint8List? precompiledCharsmapBytes;
+  final List<String> normalizerOperationTypes;
+  final List<String?> normalizerOperationPatterns;
+  final List<String?> normalizerOperationReplacements;
+  final List<List<int>?> normalizerOperationBytes;
+  final bool hasPreTokenizer;
+  final bool preTokenizerWhitespaceSplit;
+  final bool preTokenizerUseMetaspace;
+  final bool preTokenizerAddPrefixSpace;
+  final String preTokenizerReplacement;
+  final bool preTokenizerSplit;
 
   _SerializableModelData({
     required this.pieces,
@@ -944,12 +1027,23 @@ class _SerializableModelData {
     required this.eosPiece,
     required this.padPiece,
     required this.byteFallback,
+    required this.fuseUnk,
     required this.modelType,
     required this.addDummyPrefix,
     required this.removeExtraWhitespaces,
     required this.escapeWhitespaces,
     required this.normalizerName,
     this.precompiledCharsmapBytes,
+    this.normalizerOperationTypes = const [],
+    this.normalizerOperationPatterns = const [],
+    this.normalizerOperationReplacements = const [],
+    this.normalizerOperationBytes = const [],
+    this.hasPreTokenizer = false,
+    this.preTokenizerWhitespaceSplit = false,
+    this.preTokenizerUseMetaspace = true,
+    this.preTokenizerAddPrefixSpace = true,
+    this.preTokenizerReplacement = kSpaceSymbol,
+    this.preTokenizerSplit = true,
   });
 
   factory _SerializableModelData.fromTokenizer(
@@ -971,12 +1065,40 @@ class _SerializableModelData {
       eosPiece: tokenizer.vocab.eosPiece,
       padPiece: tokenizer.vocab.padPiece,
       byteFallback: tokenizer.vocab.hasByteFallback,
+      fuseUnk: tokenizer.fuseUnknownTokens,
       modelType: tokenizer.modelType,
       addDummyPrefix: tokenizer._normalizer.addDummyPrefix,
       removeExtraWhitespaces: tokenizer._normalizer.removeExtraWhitespaces,
       escapeWhitespaces: tokenizer._normalizer.escapeWhitespaces,
       normalizerName: tokenizer._normalizer.normalizerName,
-      precompiledCharsmapBytes: tokenizer._normalizer.precompiledCharsmapBytes,
+      precompiledCharsmapBytes: tokenizer._normalizer.operations.isEmpty
+          ? tokenizer._normalizer.precompiledCharsmapBytes
+          : null,
+      normalizerOperationTypes: [
+        for (final operation in tokenizer._normalizer.operations)
+          operation.type,
+      ],
+      normalizerOperationPatterns: [
+        for (final operation in tokenizer._normalizer.operations)
+          operation.pattern,
+      ],
+      normalizerOperationReplacements: [
+        for (final operation in tokenizer._normalizer.operations)
+          operation.replacement,
+      ],
+      normalizerOperationBytes: [
+        for (final operation in tokenizer._normalizer.operations)
+          operation.precompiledCharsmap?.toList(),
+      ],
+      hasPreTokenizer: tokenizer.preTokenizer != null,
+      preTokenizerWhitespaceSplit:
+          tokenizer.preTokenizer?.whitespaceSplit ?? false,
+      preTokenizerUseMetaspace: tokenizer.preTokenizer?.useMetaspace ?? true,
+      preTokenizerAddPrefixSpace:
+          tokenizer.preTokenizer?.addPrefixSpace ?? true,
+      preTokenizerReplacement:
+          tokenizer.preTokenizer?.replacement ?? kSpaceSymbol,
+      preTokenizerSplit: tokenizer.preTokenizer?.split ?? true,
     );
   }
 
@@ -989,6 +1111,26 @@ class _SerializableModelData {
           piece: pieces[i],
           score: scores[i],
           type: PieceType.fromValue(types[i]),
+        ),
+      );
+    }
+
+    final operations = <NormalizerOperation>[];
+    for (var i = 0; i < normalizerOperationTypes.length; i++) {
+      operations.add(
+        NormalizerOperation(
+          type: normalizerOperationTypes[i],
+          pattern: i < normalizerOperationPatterns.length
+              ? normalizerOperationPatterns[i]
+              : null,
+          replacement: i < normalizerOperationReplacements.length
+              ? normalizerOperationReplacements[i]
+              : null,
+          precompiledCharsmap:
+              i < normalizerOperationBytes.length &&
+                  normalizerOperationBytes[i] != null
+              ? Uint8List.fromList(normalizerOperationBytes[i]!)
+              : null,
         ),
       );
     }
@@ -1007,6 +1149,7 @@ class _SerializableModelData {
         eosPiece: eosPiece,
         padPiece: padPiece,
         byteFallback: byteFallback,
+        fuseUnk: fuseUnk,
       ),
       normalizerSpec: NormalizerSpec(
         name: normalizerName,
@@ -1014,7 +1157,17 @@ class _SerializableModelData {
         addDummyPrefix: addDummyPrefix,
         removeExtraWhitespaces: removeExtraWhitespaces,
         escapeWhitespaces: escapeWhitespaces,
+        operations: operations,
       ),
+      preTokenizerSpec: hasPreTokenizer
+          ? PreTokenizerSpec(
+              whitespaceSplit: preTokenizerWhitespaceSplit,
+              useMetaspace: preTokenizerUseMetaspace,
+              addPrefixSpace: preTokenizerAddPrefixSpace,
+              replacement: preTokenizerReplacement,
+              split: preTokenizerSplit,
+            )
+          : null,
     );
 
     return SentencePieceTokenizer._createFromModel(model, config);

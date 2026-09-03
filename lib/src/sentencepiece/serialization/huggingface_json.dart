@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import '../model/model_proto.dart';
+import '../normalizer/precompiled_charsmap.dart';
 import '../sentencepiece_tokenizer.dart';
 
 /// Known variant strings for each special token type.
@@ -29,6 +31,8 @@ class _HfMetadata {
   final bool addEosToken;
   final List<_HfAddedToken> addedTokens;
   final Set<String> specialContents;
+  final List<NormalizerOperation> normalizerOperations;
+  final PreTokenizerSpec? preTokenizer;
 
   const _HfMetadata({
     this.addDummyPrefix = true,
@@ -47,6 +51,8 @@ class _HfMetadata {
     this.addEosToken = false,
     this.addedTokens = const [],
     this.specialContents = const {},
+    this.normalizerOperations = const [],
+    this.preTokenizer,
   });
 }
 
@@ -90,7 +96,15 @@ class HuggingFaceTokenizerLoader {
       );
     }
 
-    final modelType = modelData['type'] as String?;
+    // Some official SentencePiece exports omit `model.type`; the vocab shape
+    // still unambiguously identifies Unigram (array) versus BPE (map).
+    final modelType =
+        modelData['type'] as String? ??
+        switch (modelData['vocab']) {
+          final List<dynamic> vocab when vocab.isNotEmpty => 'Unigram',
+          final Map<String, dynamic> vocab when vocab.isNotEmpty => 'BPE',
+          _ => null,
+        };
     if (modelType == null) {
       throw const FormatException(
         'Missing model type in HuggingFace tokenizer JSON',
@@ -189,8 +203,10 @@ class HuggingFaceTokenizerLoader {
         pieces.length,
         unkId,
         meta.byteFallback,
+        modelData['fuse_unk'] as bool? ?? true,
       ),
       normalizerSpec: _buildNormalizerSpec(meta),
+      preTokenizerSpec: meta.preTokenizer,
     );
   }
 
@@ -278,8 +294,10 @@ class HuggingFaceTokenizerLoader {
         vocabSize,
         unkId,
         byteFallback,
+        false,
       ),
       normalizerSpec: _buildNormalizerSpec(meta),
+      preTokenizerSpec: meta.preTokenizer,
     );
   }
 
@@ -289,6 +307,7 @@ class HuggingFaceTokenizerLoader {
     int vocabSize,
     int unkId,
     bool byteFallback,
+    bool fuseUnk,
   ) {
     return TrainerSpec(
       modelType: modelType,
@@ -302,6 +321,7 @@ class HuggingFaceTokenizerLoader {
       eosPiece: meta.eosPiece,
       padPiece: meta.padPiece,
       byteFallback: byteFallback,
+      fuseUnk: fuseUnk,
     );
   }
 
@@ -311,6 +331,7 @@ class HuggingFaceTokenizerLoader {
       addDummyPrefix: meta.addDummyPrefix,
       removeExtraWhitespaces: meta.removeExtraWhitespaces,
       escapeWhitespaces: meta.escapeWhitespaces,
+      operations: meta.normalizerOperations,
     );
   }
 
@@ -360,17 +381,18 @@ class HuggingFaceTokenizerLoader {
       }
     }
 
-    // Parse normalizer settings.
-    bool addDummyPrefix = true;
-    bool escapeWhitespaces = true;
-    bool removeExtraWhitespaces = false;
-
     final normalizerData = data['normalizer'] as Map<String, dynamic>?;
-    if (normalizerData != null) {
-      final parsed = _parseNormalizerFlags(normalizerData);
-      addDummyPrefix = parsed.addDummyPrefix;
-      escapeWhitespaces = parsed.escapeWhitespaces;
-      removeExtraWhitespaces = parsed.removeExtraWhitespaces;
+    final normalizer = _parseNormalizer(normalizerData);
+    final preTokenizer = _parsePreTokenizer(
+      data['pre_tokenizer'] as Map<String, dynamic>?,
+    );
+    var addDummyPrefix = normalizer.addDummyPrefix;
+    var escapeWhitespaces = normalizer.escapeWhitespaces;
+    if (preTokenizer?.useMetaspace == true) {
+      // Metaspace owns whitespace markers. Keep the decoder's unescape
+      // behavior, and remove its leading marker when prefixing is enabled.
+      escapeWhitespaces = true;
+      if (preTokenizer!.addPrefixSpace) addDummyPrefix = true;
     }
 
     bool byteFallback = false;
@@ -391,7 +413,7 @@ class HuggingFaceTokenizerLoader {
     return _HfMetadata(
       addDummyPrefix: addDummyPrefix,
       escapeWhitespaces: escapeWhitespaces,
-      removeExtraWhitespaces: removeExtraWhitespaces,
+      removeExtraWhitespaces: normalizer.removeExtraWhitespaces,
       byteFallback: byteFallback,
       unkId: unkId,
       bosId: bosId,
@@ -405,6 +427,8 @@ class HuggingFaceTokenizerLoader {
       addEosToken: addEosToken,
       addedTokens: addedTokens,
       specialContents: specialContents,
+      normalizerOperations: normalizer.operations,
+      preTokenizer: preTokenizer,
     );
   }
 
@@ -412,39 +436,218 @@ class HuggingFaceTokenizerLoader {
     bool addDummyPrefix,
     bool escapeWhitespaces,
     bool removeExtraWhitespaces,
+    List<NormalizerOperation> operations,
   })
-  _parseNormalizerFlags(Map<String, dynamic> data) {
-    bool addDummyPrefix = false;
-    bool escapeWhitespaces = false;
-    bool removeExtraWhitespaces = false;
+  _parseNormalizer(Map<String, dynamic>? data) {
+    if (data == null) {
+      return (
+        addDummyPrefix: true,
+        escapeWhitespaces: true,
+        removeExtraWhitespaces: false,
+        operations: const [],
+      );
+    }
 
-    final type = data['type'] as String?;
+    var addDummyPrefix = false;
+    var escapeWhitespaces = false;
+    const removeExtraWhitespaces = false;
+    final operations = <NormalizerOperation>[];
 
-    if (type == 'Sequence') {
-      final normalizers = data['normalizers'] as List? ?? [];
-      for (final raw in normalizers) {
-        final n = raw as Map<String, dynamic>;
-        final flags = _parseNormalizerFlags(n);
-        if (flags.addDummyPrefix) addDummyPrefix = true;
-        if (flags.escapeWhitespaces) escapeWhitespaces = true;
-        if (flags.removeExtraWhitespaces) removeExtraWhitespaces = true;
-      }
-    } else if (type == 'Prepend') {
-      final prepend = data['prepend'] as String?;
-      if (prepend == '\u2581' || prepend == ' ') {
-        addDummyPrefix = true;
-      }
-    } else if (type == 'Replace') {
-      final content = data['content'] as String?;
-      if (content == '\u2581') {
-        escapeWhitespaces = true;
+    void visit(Map<String, dynamic> normalizer) {
+      final type = normalizer['type'] as String?;
+      switch (type) {
+        case 'Sequence':
+          final rawNormalizers = normalizer['normalizers'];
+          if (rawNormalizers is! List) {
+            throw const FormatException(
+              'Normalizer Sequence is missing normalizers',
+            );
+          }
+          for (final raw in rawNormalizers) {
+            if (raw is! Map<String, dynamic>) {
+              throw const FormatException(
+                'Normalizer operation must be an object',
+              );
+            }
+            visit(raw);
+          }
+        case 'Precompiled':
+          final encoded = normalizer['precompiled_charsmap'];
+          if (encoded is! String || encoded.isEmpty) {
+            throw const FormatException(
+              'Precompiled normalizer is missing precompiled_charsmap',
+            );
+          }
+          final bytes = _decodeCharsmap(encoded);
+          // Validate at load time so malformed data cannot degrade to identity.
+          PrecompiledCharsmap.fromBytes(bytes);
+          operations.add(
+            NormalizerOperation(
+              type: 'Precompiled',
+              precompiledCharsmap: bytes,
+            ),
+          );
+        case 'Prepend':
+          final prepend = normalizer['prepend'];
+          if (prepend is! String) {
+            throw const FormatException(
+              'Prepend normalizer is missing prepend',
+            );
+          }
+          if (prepend == '\u2581' || prepend == ' ') addDummyPrefix = true;
+          operations.add(
+            NormalizerOperation(type: 'Prepend', replacement: prepend),
+          );
+        case 'Replace':
+          final pattern = _parseReplacePattern(normalizer['pattern']);
+          final replacement = normalizer['content'];
+          if (replacement is! String) {
+            throw const FormatException(
+              'Replace normalizer is missing string content',
+            );
+          }
+          try {
+            RegExp(pattern);
+          } on FormatException catch (error) {
+            throw FormatException('Invalid Replace normalizer pattern: $error');
+          }
+          if (replacement == '\u2581') escapeWhitespaces = true;
+          operations.add(
+            NormalizerOperation(
+              type: 'Replace',
+              pattern: pattern,
+              replacement: replacement,
+            ),
+          );
+        default:
+          throw UnsupportedError('Unsupported Hugging Face normalizer: $type');
       }
     }
 
+    visit(data);
+
+    // Keep the legacy flag implementation for old JSON pipelines. Once a
+    // Precompiled step exists, every supported step must run in JSON order.
+    final hasPrecompiled = operations.any(
+      (operation) => operation.type == 'Precompiled',
+    );
     return (
       addDummyPrefix: addDummyPrefix,
       escapeWhitespaces: escapeWhitespaces,
       removeExtraWhitespaces: removeExtraWhitespaces,
+      operations: hasPrecompiled ? List.unmodifiable(operations) : const [],
+    );
+  }
+
+  static Uint8List _decodeCharsmap(String encoded) {
+    try {
+      return base64Decode(encoded);
+    } on FormatException catch (error) {
+      throw FormatException('Invalid Precompiled charsmap base64: $error');
+    }
+  }
+
+  static String _parseReplacePattern(Object? rawPattern) {
+    if (rawPattern is! Map<String, dynamic>) {
+      throw const FormatException('Replace normalizer is missing pattern');
+    }
+    final regex = rawPattern['Regex'];
+    if (regex is String) return regex;
+    final string = rawPattern['String'];
+    if (string is String) return RegExp.escape(string);
+    throw UnsupportedError(
+      'Unsupported Hugging Face Replace pattern; expected Regex or String',
+    );
+  }
+
+  static PreTokenizerSpec? _parsePreTokenizer(Map<String, dynamic>? data) {
+    if (data == null) return null;
+
+    final type = data['type'] as String?;
+    switch (type) {
+      case 'Metaspace':
+        return _parseMetaspace(data);
+      case 'WhitespaceSplit':
+        return const PreTokenizerSpec(
+          whitespaceSplit: true,
+          useMetaspace: false,
+        );
+      case 'Sequence':
+        final rawPreTokenizers = data['pretokenizers'];
+        if (rawPreTokenizers is! List) {
+          throw const FormatException(
+            'Pre-tokenizer Sequence is missing pretokenizers',
+          );
+        }
+        var whitespaceSplit = false;
+        PreTokenizerSpec? metaspace;
+        for (final raw in rawPreTokenizers) {
+          if (raw is! Map<String, dynamic>) {
+            throw const FormatException(
+              'Pre-tokenizer operation must be an object',
+            );
+          }
+          final childType = raw['type'] as String?;
+          if (childType == 'WhitespaceSplit') {
+            if (metaspace != null) {
+              throw UnsupportedError(
+                'WhitespaceSplit after Metaspace is unsupported',
+              );
+            }
+            whitespaceSplit = true;
+          } else if (childType == 'Metaspace') {
+            if (metaspace != null) {
+              throw UnsupportedError(
+                'Multiple Metaspace pre-tokenizers are unsupported',
+              );
+            }
+            metaspace = _parseMetaspace(raw);
+          } else {
+            throw UnsupportedError(
+              'Unsupported Hugging Face pre-tokenizer: $childType',
+            );
+          }
+        }
+        if (metaspace == null) {
+          return PreTokenizerSpec(
+            whitespaceSplit: whitespaceSplit,
+            useMetaspace: false,
+          );
+        }
+        return PreTokenizerSpec(
+          whitespaceSplit: whitespaceSplit,
+          useMetaspace: true,
+          addPrefixSpace: metaspace.addPrefixSpace,
+          replacement: metaspace.replacement,
+          split: metaspace.split,
+        );
+      default:
+        throw UnsupportedError('Unsupported Hugging Face pre-tokenizer: $type');
+    }
+  }
+
+  static PreTokenizerSpec _parseMetaspace(Map<String, dynamic> data) {
+    final replacement = data['replacement'] as String? ?? '\u2581';
+    if (replacement.isEmpty) {
+      throw const FormatException('Metaspace replacement must not be empty');
+    }
+
+    final legacyPrefix = data['add_prefix_space'] as bool?;
+    final scheme = data['prepend_scheme'] as String?;
+    final addPrefixSpace =
+        legacyPrefix ??
+        switch (scheme) {
+          null || 'always' || 'first' => true,
+          'never' => false,
+          _ => throw UnsupportedError(
+            'Unsupported Metaspace prepend_scheme: $scheme',
+          ),
+        };
+
+    return PreTokenizerSpec(
+      addPrefixSpace: addPrefixSpace,
+      replacement: replacement,
+      split: data['split'] as bool? ?? true,
     );
   }
 

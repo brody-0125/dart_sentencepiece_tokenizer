@@ -11,8 +11,13 @@ import 'tokenization_algorithm.dart';
 class UnigramAlgorithm implements TokenizationAlgorithm {
   final SpVocabulary vocab;
   final bool byteFallback;
+  final bool fuseUnk;
 
-  UnigramAlgorithm({required this.vocab, this.byteFallback = false});
+  UnigramAlgorithm({
+    required this.vocab,
+    this.byteFallback = false,
+    this.fuseUnk = false,
+  });
 
   @override
   List<int> tokenize(String text) {
@@ -81,11 +86,11 @@ class UnigramAlgorithm implements TokenizationAlgorithm {
     // Check if we reached the end
     if (bestScore[n] == double.negativeInfinity) {
       // Couldn't tokenize, return UNK for each character
-      return _fallbackTokenize(text);
+      return _fuseUnknowns(_fallbackTokenize(text));
     }
 
     // Backtrack to get tokens
-    return _backtrack(text, bestPrev, bestTokenId, n);
+    return _fuseUnknowns(_backtrack(text, bestPrev, bestTokenId, n));
   }
 
   /// Encode a character at position as byte tokens.
@@ -207,5 +212,18 @@ class UnigramAlgorithm implements TokenizationAlgorithm {
     }
 
     return tokens;
+  }
+
+  List<int> _fuseUnknowns(List<int> tokens) {
+    if (!fuseUnk || tokens.length < 2) return tokens;
+
+    final fused = <int>[];
+    var previousWasUnk = false;
+    for (final token in tokens) {
+      final isUnk = token == vocab.unkId;
+      if (!isUnk || !previousWasUnk) fused.add(token);
+      previousWasUnk = isUnk;
+    }
+    return fused;
   }
 }

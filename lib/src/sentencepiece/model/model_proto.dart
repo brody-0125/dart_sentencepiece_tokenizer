@@ -79,6 +79,7 @@ class TrainerSpec {
   final String eosPiece;
   final String padPiece;
   final bool byteFallback;
+  final bool fuseUnk;
 
   const TrainerSpec({
     this.modelType = ModelType.unigram,
@@ -93,6 +94,7 @@ class TrainerSpec {
     this.eosPiece = '</s>',
     this.padPiece = '<pad>',
     this.byteFallback = false,
+    this.fuseUnk = false,
   });
 
   bool get isUnigram => modelType == ModelType.unigram;
@@ -109,6 +111,7 @@ class NormalizerSpec {
   final bool addDummyPrefix;
   final bool removeExtraWhitespaces;
   final bool escapeWhitespaces;
+  final List<NormalizerOperation> operations;
 
   const NormalizerSpec({
     this.name = '',
@@ -116,10 +119,47 @@ class NormalizerSpec {
     this.addDummyPrefix = true,
     this.removeExtraWhitespaces = true,
     this.escapeWhitespaces = true,
+    this.operations = const [],
   });
 
   @override
   String toString() => 'NormalizerSpec(name: $name)';
+}
+
+/// A serialized Hugging Face normalizer operation.
+///
+/// The operation list is populated only when the JSON pipeline contains a
+/// precompiled normalizer. Native SentencePiece models continue to use the
+/// flags above, preserving their existing behavior.
+class NormalizerOperation {
+  final String type;
+  final Uint8List? precompiledCharsmap;
+  final String? pattern;
+  final String? replacement;
+
+  const NormalizerOperation({
+    required this.type,
+    this.precompiledCharsmap,
+    this.pattern,
+    this.replacement,
+  });
+}
+
+/// The supported Hugging Face pre-tokenizer pipeline.
+class PreTokenizerSpec {
+  final bool whitespaceSplit;
+  final bool useMetaspace;
+  final bool addPrefixSpace;
+  final String replacement;
+  final bool split;
+
+  const PreTokenizerSpec({
+    this.whitespaceSplit = false,
+    this.useMetaspace = true,
+    this.addPrefixSpace = true,
+    this.replacement = '\u2581',
+    this.split = true,
+  });
 }
 
 /// Complete SentencePiece model structure.
@@ -128,12 +168,14 @@ class SentencePieceModel {
   final TrainerSpec trainerSpec;
   final NormalizerSpec normalizerSpec;
   final NormalizerSpec? denormalizerSpec;
+  final PreTokenizerSpec? preTokenizerSpec;
 
   const SentencePieceModel({
     required this.pieces,
     this.trainerSpec = const TrainerSpec(),
     this.normalizerSpec = const NormalizerSpec(),
     this.denormalizerSpec,
+    this.preTokenizerSpec,
   });
 
   int get vocabSize => pieces.length;
