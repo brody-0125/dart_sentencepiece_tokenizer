@@ -29,11 +29,17 @@ class SpPaddingConfig {
   final SpPaddingDirection direction;
   final int? length;
   final int? padToMultipleOf;
+  final int? padTokenId;
+  final String? padToken;
+  final int padTypeId;
 
   const SpPaddingConfig({
     this.direction = SpPaddingDirection.right,
     this.length,
     this.padToMultipleOf,
+    this.padTokenId,
+    this.padToken,
+    this.padTypeId = 0,
   });
 }
 
@@ -44,10 +50,12 @@ enum SpTruncationDirection { right, left }
 class SpTruncationConfig {
   final int maxLength;
   final SpTruncationDirection direction;
+  final TruncationStrategy strategy;
 
   const SpTruncationConfig({
     required this.maxLength,
     this.direction = SpTruncationDirection.right,
+    this.strategy = TruncationStrategy.longestFirst,
   });
 }
 
@@ -55,10 +63,16 @@ class SpTruncationConfig {
 class SentencePieceConfig {
   final bool addBosToken;
   final bool addEosToken;
+  final int pairEosTokensBetweenSequences;
+  final int pairTypeId;
+  final int pairSpecialTypeId;
 
   const SentencePieceConfig({
     this.addBosToken = false,
     this.addEosToken = false,
+    this.pairEosTokensBetweenSequences = 1,
+    this.pairTypeId = 1,
+    this.pairSpecialTypeId = 1,
   });
 
   /// Gemma default configuration.
@@ -74,6 +88,27 @@ class SentencePieceConfig {
   );
 }
 
+/// An added token declared by a Hugging Face tokenizer.json.
+class SpAddedToken {
+  final int id;
+  final String content;
+  final bool special;
+  final bool singleWord;
+  final bool lstrip;
+  final bool rstrip;
+  final bool normalized;
+
+  const SpAddedToken({
+    required this.id,
+    required this.content,
+    this.special = false,
+    this.singleWord = false,
+    this.lstrip = false,
+    this.rstrip = false,
+    this.normalized = true,
+  });
+}
+
 /// Pure Dart SentencePiece tokenizer.
 ///
 /// Supports both BPE (Gemma) and Unigram (Llama) algorithms.
@@ -84,6 +119,7 @@ class SentencePieceTokenizer {
   final TokenizationAlgorithm _algorithm;
   final ModelType modelType;
   final PreTokenizerSpec? _preTokenizer;
+  final List<SpAddedToken> _addedTokens;
 
   /// Access normalizer for serialization.
   SpNormalizer get normalizer => _normalizer;
@@ -107,9 +143,11 @@ class SentencePieceTokenizer {
     required TokenizationAlgorithm algorithm,
     required this.modelType,
     required PreTokenizerSpec? preTokenizer,
+    required List<SpAddedToken> addedTokens,
   }) : _normalizer = normalizer,
        _algorithm = algorithm,
-       _preTokenizer = preTokenizer;
+       _preTokenizer = preTokenizer,
+       _addedTokens = List.unmodifiable(addedTokens);
 
   /// Load tokenizer from a .model file asynchronously.
   static Future<SentencePieceTokenizer> fromModelFile(
@@ -141,8 +179,9 @@ class SentencePieceTokenizer {
 
   static SentencePieceTokenizer _createFromModel(
     SentencePieceModel model,
-    SentencePieceConfig config,
-  ) {
+    SentencePieceConfig config, {
+    List<SpAddedToken> addedTokens = const [],
+  }) {
     final vocab = SpVocabulary.fromModel(model);
     final normalizer = SpNormalizer.fromSpec(model.normalizerSpec);
     final algorithm = _createAlgorithm(model, vocab);
@@ -154,6 +193,7 @@ class SentencePieceTokenizer {
       algorithm: algorithm,
       modelType: model.trainerSpec.modelType,
       preTokenizer: model.preTokenizerSpec,
+      addedTokens: addedTokens,
     );
   }
 
@@ -164,8 +204,9 @@ class SentencePieceTokenizer {
   static SentencePieceTokenizer fromModel(
     SentencePieceModel model, {
     SentencePieceConfig config = const SentencePieceConfig(),
+    List<SpAddedToken> addedTokens = const [],
   }) {
-    return _createFromModel(model, config);
+    return _createFromModel(model, config, addedTokens: addedTokens);
   }
 
   static TokenizationAlgorithm _createAlgorithm(
@@ -201,11 +242,17 @@ class SentencePieceTokenizer {
     SpPaddingDirection direction = SpPaddingDirection.right,
     int? length,
     int? padToMultipleOf,
+    int? padTokenId,
+    String? padToken,
+    int padTypeId = 0,
   }) {
     _paddingConfig = SpPaddingConfig(
       direction: direction,
       length: length,
       padToMultipleOf: padToMultipleOf,
+      padTokenId: padTokenId,
+      padToken: padToken,
+      padTypeId: padTypeId,
     );
     return this;
   }
@@ -220,10 +267,12 @@ class SentencePieceTokenizer {
   SentencePieceTokenizer enableTruncation({
     required int maxLength,
     SpTruncationDirection direction = SpTruncationDirection.right,
+    TruncationStrategy strategy = TruncationStrategy.longestFirst,
   }) {
     _truncationConfig = SpTruncationConfig(
       maxLength: maxLength,
       direction: direction,
+      strategy: strategy,
     );
     return this;
   }
@@ -237,7 +286,7 @@ class SentencePieceTokenizer {
   /// Number of special tokens added during encoding.
   ///
   /// When [isPair] is true, calculates tokens for pair encoding:
-  /// - BOS (if enabled) + EOS between sequences + EOS at end (if enabled)
+  /// - BOS (if enabled) + configured EOS separators + EOS at end (if enabled)
   int numSpecialTokensToAdd({
     bool? addBosToken,
     bool? addEosToken,
@@ -250,7 +299,7 @@ class SentencePieceTokenizer {
     if (shouldAddBos && vocab.bosId >= 0) count++;
     if (shouldAddEos && vocab.eosId >= 0) {
       count++; // EOS at end
-      if (isPair) count++; // EOS between sequences for pairs
+      if (isPair) count += config.pairEosTokensBetweenSequences;
     }
     return count;
   }
@@ -268,11 +317,7 @@ class SentencePieceTokenizer {
     final shouldAddBos = addSpecialTokens ?? config.addBosToken;
     final shouldAddEos = addSpecialTokens ?? config.addEosToken;
 
-    // Normalize text
-    final normalized = _normalizer.normalize(text);
-
-    // Tokenize
-    final tokenIds = _tokenizeWithPipeline(normalized);
+    final tokenized = _tokenizeWithMetadata(text);
 
     // Build encoding
     final builder = EncodingBuilder();
@@ -287,20 +332,14 @@ class SentencePieceTokenizer {
     }
 
     // Add content tokens
-    var charPos = 0;
-    for (final id in tokenIds) {
-      final piece = vocab.idToPiece(id);
-      final pieceLen = piece.length;
-
+    for (final item in tokenized) {
       builder.addToken(
-        token: piece,
-        id: id,
+        token: item.token,
+        id: item.id,
         typeId: 0,
-        offset: (charPos, charPos + pieceLen),
-        wordId: null,
+        offset: item.offset,
+        wordId: item.wordId,
       );
-
-      charPos += pieceLen;
     }
 
     // Add EOS token
@@ -315,10 +354,13 @@ class SentencePieceTokenizer {
     return _applyPostProcessing(builder.build());
   }
 
-  Encoding _applyPostProcessing(Encoding encoding) {
+  Encoding _applyPostProcessing(
+    Encoding encoding, {
+    bool applyTruncation = true,
+  }) {
     var result = encoding;
 
-    if (_truncationConfig != null) {
+    if (applyTruncation && _truncationConfig != null) {
       result = result.withTruncation(
         maxLength: _truncationConfig!.maxLength,
         truncateFromEnd:
@@ -328,22 +370,27 @@ class SentencePieceTokenizer {
 
     if (_paddingConfig != null) {
       final padOnRight = _paddingConfig!.direction == SpPaddingDirection.right;
+      final padTokenId =
+          _paddingConfig!.padTokenId ?? (vocab.padId >= 0 ? vocab.padId : 0);
+      final padToken = _paddingConfig!.padToken ?? vocab.padPiece;
 
       if (_paddingConfig!.length != null) {
         result = result.withPadding(
           targetLength: _paddingConfig!.length!,
-          padTokenId: vocab.padId >= 0 ? vocab.padId : 0,
-          padToken: vocab.padPiece,
+          padTokenId: padTokenId,
+          padToken: padToken,
           padOnRight: padOnRight,
+          padTypeId: _paddingConfig!.padTypeId,
         );
       }
 
       if (_paddingConfig!.padToMultipleOf != null) {
         result = result.withPaddingToMultipleOf(
           multiple: _paddingConfig!.padToMultipleOf!,
-          padTokenId: vocab.padId >= 0 ? vocab.padId : 0,
-          padToken: vocab.padPiece,
+          padTokenId: padTokenId,
+          padToken: padToken,
           padOnRight: padOnRight,
+          padTypeId: _paddingConfig!.padTypeId,
         );
       }
     }
@@ -351,12 +398,15 @@ class SentencePieceTokenizer {
     return result;
   }
 
-  List<Encoding> _applyBatchPostProcessing(List<Encoding> encodings) {
+  List<Encoding> _applyBatchPostProcessing(
+    List<Encoding> encodings, {
+    bool applyTruncation = true,
+  }) {
     if (encodings.isEmpty) return encodings;
 
     var results = encodings;
 
-    if (_truncationConfig != null) {
+    if (applyTruncation && _truncationConfig != null) {
       results = results
           .map(
             (e) => e.withTruncation(
@@ -370,7 +420,9 @@ class SentencePieceTokenizer {
 
     if (_paddingConfig != null) {
       final padOnRight = _paddingConfig!.direction == SpPaddingDirection.right;
-      final padTokenId = vocab.padId >= 0 ? vocab.padId : 0;
+      final padTokenId =
+          _paddingConfig!.padTokenId ?? (vocab.padId >= 0 ? vocab.padId : 0);
+      final padToken = _paddingConfig!.padToken ?? vocab.padPiece;
 
       int targetLength;
       if (_paddingConfig!.length != null) {
@@ -394,8 +446,9 @@ class SentencePieceTokenizer {
             (e) => e.withPadding(
               targetLength: targetLength,
               padTokenId: padTokenId,
-              padToken: vocab.padPiece,
+              padToken: padToken,
               padOnRight: padOnRight,
+              padTypeId: _paddingConfig!.padTypeId,
             ),
           )
           .toList();
@@ -406,10 +459,11 @@ class SentencePieceTokenizer {
 
   /// Encode a pair of sequences for tasks like question answering or NLI.
   ///
-  /// The first sequence gets typeId=0, second sequence gets typeId=1.
-  /// Special tokens are handled according to config:
+  /// The first sequence gets typeId=0 and the second sequence gets the
+  /// configured pair type ID. Special tokens are handled according to config:
   /// - BOS token (if enabled) is added at the start
-  /// - EOS token (if enabled) is added between sequences and at the end
+  /// - Configured EOS separators (if enabled) are added between sequences,
+  ///   followed by the final EOS token
   ///
   /// The [strategy] parameter controls how truncation is applied when the
   /// combined sequences exceed [maxLength]:
@@ -422,7 +476,7 @@ class SentencePieceTokenizer {
     String textPair, {
     bool? addSpecialTokens,
     int? maxLength,
-    TruncationStrategy strategy = TruncationStrategy.longestFirst,
+    TruncationStrategy? strategy,
   }) {
     if (text.length > _kMaxInputLength) {
       throw ArgumentError(
@@ -437,12 +491,18 @@ class SentencePieceTokenizer {
 
     final shouldAddBos = addSpecialTokens ?? config.addBosToken;
     final shouldAddEos = addSpecialTokens ?? config.addEosToken;
+    final configuredTruncation = _truncationConfig;
+    final effectiveMaxLength = maxLength ?? configuredTruncation?.maxLength;
+    final effectiveStrategy =
+        strategy ??
+        configuredTruncation?.strategy ??
+        TruncationStrategy.longestFirst;
 
     // Calculate number of special tokens for truncation
     var numSpecialTokens = 0;
     if (shouldAddBos && vocab.bosId >= 0) numSpecialTokens++;
     if (shouldAddEos && vocab.eosId >= 0) {
-      numSpecialTokens += 2; // separator + end
+      numSpecialTokens += 1 + config.pairEosTokensBetweenSequences;
     }
 
     // Encode both sequences without special tokens
@@ -452,7 +512,11 @@ class SentencePieceTokenizer {
     _truncationConfig = null;
 
     final encoding1 = _encodeSequence(text, typeId: 0, sequenceId: 0);
-    final encoding2 = _encodeSequence(textPair, typeId: 1, sequenceId: 1);
+    final encoding2 = _encodeSequence(
+      textPair,
+      typeId: config.pairTypeId,
+      sequenceId: 1,
+    );
 
     _paddingConfig = savedPadding;
     _truncationConfig = savedTruncation;
@@ -461,12 +525,12 @@ class SentencePieceTokenizer {
     Encoding truncated1;
     Encoding truncated2;
 
-    if (maxLength != null) {
+    if (effectiveMaxLength != null) {
       (truncated1, truncated2) = Encoding.truncatePair(
         encodingA: encoding1,
         encodingB: encoding2,
-        maxLength: maxLength,
-        strategy: strategy,
+        maxLength: effectiveMaxLength,
+        strategy: effectiveStrategy,
         numSpecialTokens: numSpecialTokens,
       );
     } else {
@@ -498,13 +562,15 @@ class SentencePieceTokenizer {
       );
     }
 
-    // Add separator EOS token (between sequences)
-    if (shouldAddEos && vocab.eosId >= 0) {
-      builder.addSpecialToken(
-        token: vocab.eosPiece,
-        id: vocab.eosId,
-        typeId: 0,
-      );
+    // Add separator EOS tokens (between sequences)
+    for (var i = 0; i < config.pairEosTokensBetweenSequences; i++) {
+      if (shouldAddEos && vocab.eosId >= 0) {
+        builder.addSpecialToken(
+          token: vocab.eosPiece,
+          id: vocab.eosId,
+          typeId: config.pairSpecialTypeId,
+        );
+      }
     }
 
     // Add second sequence tokens
@@ -512,7 +578,7 @@ class SentencePieceTokenizer {
       builder.addToken(
         token: truncated2.tokens[i],
         id: truncated2.ids[i],
-        typeId: 1,
+        typeId: config.pairTypeId,
         offset: truncated2.offsets[i],
         wordId: truncated2.wordIds[i],
         sequenceId: 1,
@@ -524,11 +590,14 @@ class SentencePieceTokenizer {
       builder.addSpecialToken(
         token: vocab.eosPiece,
         id: vocab.eosId,
-        typeId: 1,
+        typeId: config.pairSpecialTypeId,
       );
     }
 
-    return _applyPostProcessing(builder.build());
+    return _applyPostProcessing(
+      builder.build(),
+      applyTruncation: effectiveMaxLength == null,
+    );
   }
 
   /// Encode a sequence without special tokens, for internal use.
@@ -537,26 +606,18 @@ class SentencePieceTokenizer {
     required int typeId,
     required int sequenceId,
   }) {
-    final normalized = _normalizer.normalize(text);
-    final tokenIds = _tokenizeWithPipeline(normalized);
+    final tokenized = _tokenizeWithMetadata(text);
 
     final builder = EncodingBuilder();
-    var charPos = 0;
-
-    for (final id in tokenIds) {
-      final piece = vocab.idToPiece(id);
-      final pieceLen = piece.length;
-
+    for (final item in tokenized) {
       builder.addToken(
-        token: piece,
-        id: id,
+        token: item.token,
+        id: item.id,
         typeId: typeId,
-        offset: (charPos, charPos + pieceLen),
-        wordId: null,
+        offset: item.offset,
+        wordId: item.wordId,
         sequenceId: sequenceId,
       );
-
-      charPos += pieceLen;
     }
 
     return builder.build();
@@ -567,10 +628,15 @@ class SentencePieceTokenizer {
     List<(String, String)> textPairs, {
     bool? addSpecialTokens,
     int? maxLength,
-    TruncationStrategy strategy = TruncationStrategy.longestFirst,
+    TruncationStrategy? strategy,
   }) {
     final savedPadding = _paddingConfig;
     final savedTruncation = _truncationConfig;
+    final effectiveMaxLength = maxLength ?? savedTruncation?.maxLength;
+    final effectiveStrategy =
+        strategy ??
+        savedTruncation?.strategy ??
+        TruncationStrategy.longestFirst;
     _paddingConfig = null;
     _truncationConfig = null;
 
@@ -580,8 +646,8 @@ class SentencePieceTokenizer {
             pair.$1,
             pair.$2,
             addSpecialTokens: addSpecialTokens,
-            maxLength: maxLength,
-            strategy: strategy,
+            maxLength: effectiveMaxLength,
+            strategy: effectiveStrategy,
           ),
         )
         .toList();
@@ -589,7 +655,10 @@ class SentencePieceTokenizer {
     _paddingConfig = savedPadding;
     _truncationConfig = savedTruncation;
 
-    return _applyBatchPostProcessing(encodings);
+    return _applyBatchPostProcessing(
+      encodings,
+      applyTruncation: effectiveMaxLength == null,
+    );
   }
 
   /// Encode multiple texts.
@@ -615,6 +684,9 @@ class SentencePieceTokenizer {
     bool? addSpecialTokens,
     int? numWorkers,
   }) async {
+    if (_addedTokens.isNotEmpty) {
+      return encodeBatch(texts, addSpecialTokens: addSpecialTokens);
+    }
     if (texts.length < _kMinBatchSizeForParallel) {
       return encodeBatch(texts, addSpecialTokens: addSpecialTokens);
     }
@@ -911,65 +983,445 @@ class SentencePieceTokenizer {
       );
     }
 
-    final normalized = _normalizer.normalize(text);
-    final tokenIds = _tokenizeWithPipeline(normalized);
-
-    return [for (final id in tokenIds) vocab.idToPiece(id)];
+    return [for (final token in _tokenizeWithMetadata(text)) token.token];
   }
 
-  List<int> _tokenizeWithPipeline(String normalized) {
-    final spec = _preTokenizer;
-    if (spec == null) return _algorithm.tokenize(normalized);
+  List<_TokenizedPiece> _tokenizeWithMetadata(String original) {
+    final matches = _findAddedTokenMatches(original);
+    if (matches.isEmpty) return _tokenizeWithoutAddedTokens(original);
 
-    final chunks = <String>[];
+    final result = <_TokenizedPiece>[];
+    var cursor = 0;
+    for (final match in matches) {
+      if (cursor < match.start) {
+        result.addAll(
+          _shiftTokenOffsets(
+            _tokenizeWithoutAddedTokens(
+              _sliceRunes(original, cursor, match.start),
+            ),
+            cursor,
+          ),
+        );
+      }
+      result.add(
+        _TokenizedPiece(
+          id: match.token.id,
+          token: match.token.content,
+          offset: (match.start, match.end),
+          wordId: null,
+        ),
+      );
+      cursor = match.end;
+    }
+    if (cursor < original.runes.length) {
+      result.addAll(
+        _shiftTokenOffsets(
+          _tokenizeWithoutAddedTokens(_sliceRunes(original, cursor)),
+          cursor,
+        ),
+      );
+    }
+    return result;
+  }
+
+  List<_TokenizedPiece> _tokenizeWithoutAddedTokens(String original) {
+    final normalized = _normalizer.normalize(original);
+    final alignment = _alignNormalizedText(original, normalized);
+    final chunks = _buildPipelineChunks(normalized, alignment: alignment);
+    final result = <_TokenizedPiece>[];
+
+    for (final chunk in chunks) {
+      final ids = _algorithm.tokenize(chunk.text);
+      final chars = chunk.text.runes.toList();
+      var cursor = 0;
+      for (final id in ids) {
+        final token = vocab.idToPiece(id);
+        final tokenChars = token.runes.toList();
+        final start = cursor;
+        if (_startsWith(chars, cursor, tokenChars)) {
+          cursor += tokenChars.length;
+        } else if (cursor < chars.length) {
+          cursor++;
+        }
+        final end = cursor;
+        result.add(
+          _TokenizedPiece(
+            id: id,
+            token: token,
+            offset: _sourceOffset(
+              chunk.alignment,
+              chars,
+              start,
+              end,
+              leadingMarkerLength: chunk.leadingMarkerLength,
+              includeLeadingMarker: chunk.includeLeadingMarker,
+            ),
+            wordId: chunk.wordId,
+          ),
+        );
+      }
+    }
+    return result;
+  }
+
+  List<_TokenizedPiece> _shiftTokenOffsets(
+    List<_TokenizedPiece> pieces,
+    int offset,
+  ) {
+    return [
+      for (final piece in pieces)
+        _TokenizedPiece(
+          id: piece.id,
+          token: piece.token,
+          offset: (piece.offset.$1 + offset, piece.offset.$2 + offset),
+          wordId: piece.wordId,
+        ),
+    ];
+  }
+
+  List<_AddedTokenMatch> _findAddedTokenMatches(String text) {
+    if (_addedTokens.isEmpty || text.isEmpty) return const [];
+
+    final chars = text.runes.toList();
+    final matches = <_AddedTokenMatch>[];
+    var cursor = 0;
+    while (cursor < chars.length) {
+      _AddedTokenMatch? best;
+      for (final token in _addedTokens) {
+        final normalizedContent = token.normalized
+            ? _normalizer.normalize(token.content)
+            : token.content;
+        final tokenChars = normalizedContent.runes.toList();
+        if (tokenChars.isEmpty) continue;
+        final matchStart = cursor;
+        var contentStart = cursor;
+        if (token.lstrip) {
+          while (contentStart < chars.length &&
+              _isWhitespaceRune(chars[contentStart])) {
+            contentStart++;
+          }
+        }
+        final contentEnd = _matchAddedTokenContent(
+          text,
+          chars,
+          contentStart,
+          normalizedContent,
+          normalized: token.normalized,
+        );
+        if (contentEnd == null) continue;
+        var end = contentEnd;
+        if (token.rstrip) {
+          while (end < chars.length && _isWhitespaceRune(chars[end])) {
+            end++;
+          }
+        }
+        if (token.singleWord &&
+            ((contentStart > 0 && _isWordRune(chars[contentStart - 1])) ||
+                (end < chars.length && _isWordRune(chars[end])))) {
+          continue;
+        }
+        final candidate = _AddedTokenMatch(
+          start: matchStart,
+          end: end,
+          token: token,
+        );
+        if (best == null ||
+            candidate.end - candidate.start > best.end - best.start) {
+          best = candidate;
+        }
+      }
+      if (best == null) {
+        cursor++;
+      } else {
+        matches.add(best);
+        cursor = best.end;
+      }
+    }
+    return matches;
+  }
+
+  int? _matchAddedTokenContent(
+    String text,
+    List<int> chars,
+    int start,
+    String content, {
+    required bool normalized,
+  }) {
+    final contentChars = content.runes.toList();
+    if (!normalized) {
+      return _startsWith(chars, start, contentChars)
+          ? start + contentChars.length
+          : null;
+    }
+
+    // Most tokens match their raw spelling. Try that fast path before the
+    // bounded normalization-aware search for compatibility with normalized
+    // AddedToken entries such as full-width forms.
+    if (_startsWith(chars, start, contentChars)) {
+      final rawEnd = start + contentChars.length;
+      if (_normalizer.normalize(_sliceRunes(text, start, rawEnd)) == content) {
+        return rawEnd;
+      }
+    }
+
+    final maxLength = contentChars.length + 32;
+    final endLimit = start + maxLength < chars.length
+        ? start + maxLength
+        : chars.length;
+    for (var end = start + 1; end <= endLimit; end++) {
+      if (_normalizer.normalize(_sliceRunes(text, start, end)) == content) {
+        return end;
+      }
+    }
+    return null;
+  }
+
+  String _sliceRunes(String text, int start, [int? end]) {
+    final chars = text.runes.toList();
+    return String.fromCharCodes(chars.sublist(start, end));
+  }
+
+  bool _isWordRune(int rune) {
+    return rune == 0x5F ||
+        rune >= 0x30 && rune <= 0x39 ||
+        rune >= 0x41 && rune <= 0x5A ||
+        rune >= 0x61 && rune <= 0x7A ||
+        rune > 0x7F && !_isWhitespaceRune(rune);
+  }
+
+  List<_PipelineChunk> _buildPipelineChunks(
+    String normalized, {
+    List<(int, int)?>? alignment,
+  }) {
+    final spec = _preTokenizer;
+    final chars = normalized.runes.toList();
+    final source = alignment ?? List<(int, int)?>.filled(chars.length, null);
+    if (spec == null) {
+      return [
+        _PipelineChunk(text: normalized, alignment: source, wordId: null),
+      ];
+    }
+
+    final chunks = <_PipelineChunk>[];
     if (spec.whitespaceSplit) {
-      final startsWithWhitespace = RegExp(r'^\s').hasMatch(normalized);
-      final words = normalized
-          .split(RegExp(r'\s+'))
-          .where((word) => word.isNotEmpty);
+      final startsWithWhitespace =
+          chars.isNotEmpty && _isWhitespaceRune(chars.first);
+      var i = 0;
       var wordIndex = 0;
-      for (var word in words) {
-        if (spec.useMetaspace && word.startsWith(spec.replacement)) {
-          word = word.substring(spec.replacement.length);
+      while (i < chars.length) {
+        while (i < chars.length && _isWhitespaceRune(chars[i])) {
+          i++;
+        }
+        if (i >= chars.length) break;
+        final wordChars = <int>[];
+        final wordAlignment = <(int, int)?>[];
+        while (i < chars.length && !_isWhitespaceRune(chars[i])) {
+          wordChars.add(chars[i]);
+          wordAlignment.add(source[i]);
+          i++;
+        }
+        if (spec.useMetaspace &&
+            _startsWith(wordChars, 0, spec.replacement.runes.toList())) {
+          final markerLength = spec.replacement.runes.length;
+          wordChars.removeRange(0, markerLength);
+          wordAlignment.removeRange(0, markerLength);
         }
         final addMarker =
             spec.addPrefixSpace ||
             wordIndex > 0 ||
             (wordIndex == 0 && startsWithWhitespace);
+        final marker = spec.useMetaspace && addMarker
+            ? spec.replacement.runes.toList()
+            : const <int>[];
         chunks.add(
-          spec.useMetaspace && addMarker ? '${spec.replacement}$word' : word,
+          _PipelineChunk(
+            text: String.fromCharCodes([...marker, ...wordChars]),
+            alignment: [
+              ...List<(int, int)?>.filled(marker.length, null),
+              ...wordAlignment,
+            ],
+            wordId: wordIndex,
+            leadingMarkerLength: marker.length,
+            includeLeadingMarker: false,
+          ),
         );
         wordIndex++;
       }
     } else if (spec.useMetaspace) {
-      var text = normalized.replaceAll(RegExp(r'\s'), spec.replacement);
+      final replacement = spec.replacement.runes.toList();
+      final transformedChars = <int>[];
+      final transformedAlignment = <(int, int)?>[];
+      for (var i = 0; i < chars.length; i++) {
+        if (_isWhitespaceRune(chars[i])) {
+          transformedChars.addAll(replacement);
+          transformedAlignment.addAll(
+            List<(int, int)?>.filled(replacement.length, source[i]),
+          );
+        } else {
+          transformedChars.add(chars[i]);
+          transformedAlignment.add(source[i]);
+        }
+      }
       if (spec.addPrefixSpace &&
-          text.isNotEmpty &&
-          !text.startsWith(spec.replacement)) {
-        text = '${spec.replacement}$text';
+          transformedChars.isNotEmpty &&
+          !_startsWith(transformedChars, 0, replacement)) {
+        transformedChars.insertAll(0, replacement);
+        transformedAlignment.insertAll(
+          0,
+          List<(int, int)?>.filled(replacement.length, null),
+        );
       }
 
-      if (spec.split) {
-        final parts = text.split(spec.replacement);
-        chunks.addAll([
-          for (var i = 0; i < parts.length; i++)
-            if (parts[i].isNotEmpty)
-              (i > 0 || text.startsWith(spec.replacement)
-                  ? '${spec.replacement}${parts[i]}'
-                  : parts[i]),
-        ]);
+      if (!spec.split) {
+        chunks.add(
+          _PipelineChunk(
+            text: String.fromCharCodes(transformedChars),
+            alignment: transformedAlignment,
+            wordId: 0,
+            leadingMarkerLength: _startsWith(transformedChars, 0, replacement)
+                ? replacement.length
+                : 0,
+            includeLeadingMarker: true,
+          ),
+        );
       } else {
-        chunks.add(text);
+        var start = 0;
+        var wordIndex = 0;
+        while (start < transformedChars.length) {
+          var markerStart = start;
+          if (_startsWith(transformedChars, markerStart, replacement)) {
+            markerStart += replacement.length;
+          }
+          var end = markerStart;
+          while (end < transformedChars.length &&
+              !_startsWith(transformedChars, end, replacement)) {
+            end++;
+          }
+          if (end > markerStart) {
+            final chunkStart = markerStart == start
+                ? start
+                : markerStart - replacement.length;
+            final chunkChars = transformedChars.sublist(chunkStart, end);
+            chunks.add(
+              _PipelineChunk(
+                text: String.fromCharCodes(chunkChars),
+                alignment: transformedAlignment.sublist(chunkStart, end),
+                wordId: wordIndex,
+                leadingMarkerLength: markerStart == start
+                    ? 0
+                    : replacement.length,
+                includeLeadingMarker: true,
+              ),
+            );
+            wordIndex++;
+          }
+          start = end;
+          if (start < transformedChars.length &&
+              _startsWith(transformedChars, start, replacement)) {
+            // The next chunk owns this marker.
+          }
+        }
       }
     } else {
-      chunks.add(normalized);
+      chunks.add(
+        _PipelineChunk(text: normalized, alignment: source, wordId: null),
+      );
     }
+    return chunks;
+  }
 
-    final tokenIds = <int>[];
-    for (final chunk in chunks) {
-      tokenIds.addAll(_algorithm.tokenize(chunk));
+  List<(int, int)?> _alignNormalizedText(String original, String normalized) {
+    final source = original.runes.toList();
+    final result = <(int, int)?>[];
+    var cursor = 0;
+    (int, int)? previous;
+
+    for (final rune in normalized.runes) {
+      if (_isWhitespaceRune(rune)) {
+        if (cursor < source.length && _isWhitespaceRune(source[cursor])) {
+          var end = cursor + 1;
+          while (end < source.length && _isWhitespaceRune(source[end])) {
+            end++;
+          }
+          previous = (cursor, end);
+          result.add(previous);
+          cursor = end;
+        } else {
+          result.add(null);
+        }
+        continue;
+      }
+
+      var match = cursor;
+      while (match < source.length && !_equivalentRune(source[match], rune)) {
+        if (!_isWhitespaceRune(source[match])) break;
+        match++;
+      }
+      if (match < source.length && _equivalentRune(source[match], rune)) {
+        previous = (match, match + 1);
+        result.add(previous);
+        cursor = match + 1;
+      } else if (cursor < source.length) {
+        previous = (cursor, cursor + 1);
+        result.add(previous);
+        cursor++;
+      } else {
+        result.add(previous);
+      }
     }
-    return tokenIds;
+    return result;
+  }
+
+  (int, int) _sourceOffset(
+    List<(int, int)?> alignment,
+    List<int> chars,
+    int start,
+    int end, {
+    required int leadingMarkerLength,
+    required bool includeLeadingMarker,
+  }) {
+    final spans = <(int, int)>[];
+    for (var i = start; i < end && i < alignment.length; i++) {
+      if (!includeLeadingMarker && i < start + leadingMarkerLength) continue;
+      final span = alignment[i];
+      if (span != null) {
+        if (includeLeadingMarker && i < start + leadingMarkerLength) {
+          spans.add((span.$2 - 1, span.$2));
+        } else {
+          spans.add(span);
+        }
+      }
+    }
+    if (spans.isNotEmpty) {
+      return (
+        spans.map((span) => span.$1).reduce((a, b) => a < b ? a : b),
+        spans.map((span) => span.$2).reduce((a, b) => a > b ? a : b),
+      );
+    }
+    if (start < end && leadingMarkerLength > 0 && start == 0) {
+      return (0, 1);
+    }
+    return (0, 0);
+  }
+
+  bool _startsWith(List<int> chars, int start, List<int> prefix) {
+    if (start < 0 || start + prefix.length > chars.length) return false;
+    for (var i = 0; i < prefix.length; i++) {
+      if (chars[start + i] != prefix[i]) return false;
+    }
+    return true;
+  }
+
+  bool _isWhitespaceRune(int rune) =>
+      RegExp(r'^\s$').hasMatch(String.fromCharCode(rune));
+
+  bool _equivalentRune(int source, int normalized) {
+    if (source == normalized) return true;
+    if (source == 0x3000 && normalized == 0x20) return true;
+    if (source >= 0xFF01 && source <= 0xFF5E) {
+      return source - 0xFEE0 == normalized;
+    }
+    return false;
   }
 
   /// Tokenize multiple texts.
@@ -980,6 +1432,48 @@ class SentencePieceTokenizer {
   @override
   String toString() =>
       'SentencePieceTokenizer(modelType: $modelType, vocabSize: $vocabSize)';
+}
+
+class _TokenizedPiece {
+  final int id;
+  final String token;
+  final (int, int) offset;
+  final int? wordId;
+
+  const _TokenizedPiece({
+    required this.id,
+    required this.token,
+    required this.offset,
+    required this.wordId,
+  });
+}
+
+class _AddedTokenMatch {
+  final int start;
+  final int end;
+  final SpAddedToken token;
+
+  const _AddedTokenMatch({
+    required this.start,
+    required this.end,
+    required this.token,
+  });
+}
+
+class _PipelineChunk {
+  final String text;
+  final List<(int, int)?> alignment;
+  final int? wordId;
+  final int leadingMarkerLength;
+  final bool includeLeadingMarker;
+
+  const _PipelineChunk({
+    required this.text,
+    required this.alignment,
+    required this.wordId,
+    this.leadingMarkerLength = 0,
+    this.includeLeadingMarker = false,
+  });
 }
 
 /// Serializable model data for Isolate transfer.

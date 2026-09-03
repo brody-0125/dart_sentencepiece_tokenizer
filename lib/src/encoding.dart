@@ -238,6 +238,7 @@ class Encoding {
     required int padTokenId,
     String padToken = '[PAD]',
     bool padOnRight = true,
+    int padTypeId = 0,
   }) {
     if (length >= targetLength) {
       return this;
@@ -254,6 +255,7 @@ class Encoding {
     paddedIds.setRange(dstOffset, dstOffset + srcLen, ids);
 
     final paddedTypeIds = Uint8List(targetLength);
+    paddedTypeIds.fillRange(0, targetLength, padTypeId);
     paddedTypeIds.setRange(dstOffset, dstOffset + srcLen, typeIds);
 
     final paddedAttentionMask = Uint8List(targetLength);
@@ -293,6 +295,7 @@ class Encoding {
     required int padTokenId,
     String padToken = '[PAD]',
     bool padOnRight = true,
+    int padTypeId = 0,
   }) {
     if (multiple <= 0) return this;
 
@@ -305,6 +308,7 @@ class Encoding {
       padTokenId: padTokenId,
       padToken: padToken,
       padOnRight: padOnRight,
+      padTypeId: padTypeId,
     );
   }
 

@@ -82,6 +82,10 @@ extension SentencePieceTokenizerJson on SentencePieceTokenizer {
       'config': {
         'add_bos_token': config.addBosToken,
         'add_eos_token': config.addEosToken,
+        'pair_eos_tokens_between_sequences':
+            config.pairEosTokensBetweenSequences,
+        'pair_type_id': config.pairTypeId,
+        'pair_special_type_id': config.pairSpecialTypeId,
       },
       'byte_fallback': vocab.hasByteFallback,
       'fuse_unk': fuseUnknownTokens,
@@ -285,6 +289,10 @@ class TokenizerJsonLoader {
         finalConfig = SentencePieceConfig(
           addBosToken: configData['add_bos_token'] as bool? ?? false,
           addEosToken: configData['add_eos_token'] as bool? ?? false,
+          pairEosTokensBetweenSequences:
+              configData['pair_eos_tokens_between_sequences'] as int? ?? 1,
+          pairTypeId: configData['pair_type_id'] as int? ?? 1,
+          pairSpecialTypeId: configData['pair_special_type_id'] as int? ?? 1,
         );
       } else {
         finalConfig = const SentencePieceConfig();

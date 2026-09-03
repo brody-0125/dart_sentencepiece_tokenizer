@@ -16,15 +16,18 @@ Map<String, dynamic> _xlmTokenizerJson({
   required Map<String, dynamic> normalizer,
   Map<String, dynamic>? preTokenizer,
   Map<String, dynamic>? postProcessor,
+  List<Map<String, dynamic>>? addedTokens,
 }) {
   return {
     'version': '1.0',
-    'added_tokens': [
-      {'id': 0, 'content': '<s>', 'special': true},
-      {'id': 1, 'content': '<pad>', 'special': true},
-      {'id': 2, 'content': '</s>', 'special': true},
-      {'id': 3, 'content': '<unk>', 'special': true},
-    ],
+    'added_tokens':
+        addedTokens ??
+        [
+          {'id': 0, 'content': '<s>', 'special': true},
+          {'id': 1, 'content': '<pad>', 'special': true},
+          {'id': 2, 'content': '</s>', 'special': true},
+          {'id': 3, 'content': '<unk>', 'special': true},
+        ],
     'normalizer': normalizer,
     'pre_tokenizer': preTokenizer,
     'post_processor': postProcessor,
@@ -261,6 +264,176 @@ void main() {
       },
     );
 
+    test('uses pair template EOS count and type IDs', () {
+      final postProcessor = _xlmTemplateProcessor()
+        ..['pair'] = [
+          {
+            'SpecialToken': {'id': '<s>', 'type_id': 0},
+          },
+          {
+            'Sequence': {'id': 'A', 'type_id': 0},
+          },
+          {
+            'SpecialToken': {'id': '</s>', 'type_id': 0},
+          },
+          {
+            'SpecialToken': {'id': '</s>', 'type_id': 0},
+          },
+          {
+            'Sequence': {'id': 'B', 'type_id': 0},
+          },
+          {
+            'SpecialToken': {'id': '</s>', 'type_id': 0},
+          },
+        ];
+      final tokenizer = HuggingFaceTokenizerLoader.fromMap(
+        _xlmTokenizerJson(
+          pieces: ['<s>', '<pad>', '</s>', '<unk>', 'hello'],
+          normalizer: _emptyNormalizer,
+          postProcessor: postProcessor,
+        ),
+      );
+
+      final encoding = tokenizer.encodePair('hello', 'hello');
+
+      expect(encoding.ids, [0, 4, 2, 2, 4, 2]);
+      expect(encoding.typeIds, [0, 0, 0, 0, 0, 0]);
+      expect(encoding.specialTokensMask, [1, 0, 1, 1, 0, 1]);
+
+      final restored = TokenizerJsonLoader.fromJsonString(tokenizer.toJson());
+      final restoredPair = restored.encodePair('hello', 'hello');
+      expect(restoredPair.ids, encoding.ids);
+      expect(restoredPair.typeIds, encoding.typeIds);
+    });
+
+    test('keeps pair sequence and special-token type IDs independent', () {
+      final postProcessor = _xlmTemplateProcessor()
+        ..['pair'] = [
+          {
+            'SpecialToken': {'id': '<s>', 'type_id': 0},
+          },
+          {
+            'Sequence': {'id': 'A', 'type_id': 0},
+          },
+          {
+            'SpecialToken': {'id': '</s>', 'type_id': 0},
+          },
+          {
+            'SpecialToken': {'id': '</s>', 'type_id': 0},
+          },
+          {
+            'Sequence': {'id': 'B', 'type_id': 1},
+          },
+          {
+            'SpecialToken': {'id': '</s>', 'type_id': 0},
+          },
+        ];
+
+      final tokenizer = HuggingFaceTokenizerLoader.fromMap(
+        _xlmTokenizerJson(
+          pieces: ['<s>', '<pad>', '</s>', '<unk>', 'hello'],
+          normalizer: _emptyNormalizer,
+          postProcessor: postProcessor,
+        ),
+      );
+
+      expect(tokenizer.encodePair('hello', 'hello').typeIds, [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+      ]);
+    });
+
+    test('recognizes added special tokens before model normalization', () {
+      final tokenizer = HuggingFaceTokenizerLoader.fromMap(
+        _xlmTokenizerJson(
+          pieces: ['<s>', '<pad>', '</s>', '<unk>', 'hello'],
+          normalizer: _emptyNormalizer,
+          postProcessor: _xlmTemplateProcessor(),
+        ),
+      );
+
+      final encoding = tokenizer.encode('<s>');
+
+      expect(encoding.ids, [0, 0, 2]);
+      expect(encoding.tokens, ['<s>', '<s>', '</s>']);
+      expect(encoding.offsets, [(0, 0), (0, 3), (0, 0)]);
+      expect(encoding.specialTokensMask, [1, 0, 1]);
+    });
+
+    test(
+      'preserves declared IDs for added tokens regardless of JSON order',
+      () {
+        final tokenizer = HuggingFaceTokenizerLoader.fromMap(
+          _xlmTokenizerJson(
+            pieces: ['<unk>', 'a'],
+            normalizer: _emptyNormalizer,
+            addedTokens: [
+              {'id': 3, 'content': '<foo>', 'special': false},
+              {'id': 2, 'content': '<bar>', 'special': true},
+            ],
+          ),
+        );
+
+        expect(tokenizer.encode('<foo>', addSpecialTokens: false).ids, [3]);
+        expect(tokenizer.encode('<bar>', addSpecialTokens: false).ids, [2]);
+      },
+    );
+
+    test('honors normalized AddedToken matching', () {
+      final charsmap = buildPrecompiledCharsmapBlob({'Ａ': 'A'});
+      final tokenizer = HuggingFaceTokenizerLoader.fromMap(
+        _xlmTokenizerJson(
+          pieces: ['<unk>', 'a'],
+          normalizer: {
+            'type': 'Precompiled',
+            'precompiled_charsmap': base64Encode(charsmap),
+          },
+          addedTokens: [
+            {'id': 5, 'content': 'Ａ', 'special': false, 'normalized': true},
+          ],
+        ),
+      );
+
+      expect(tokenizer.encode('A', addSpecialTokens: false).ids, [5]);
+      expect(tokenizer.encode('Ａ', addSpecialTokens: false).ids, [5]);
+    });
+
+    test('loads tokenizer.json truncation and batch padding settings', () {
+      final json =
+          _xlmTokenizerJson(
+              pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+              normalizer: _emptyNormalizer,
+              postProcessor: _xlmTemplateProcessor(),
+            )
+            ..['truncation'] = {
+              'max_length': 4,
+              'stride': 0,
+              'strategy': 'LongestFirst',
+            }
+            ..['padding'] = {
+              'strategy': 'BatchLongest',
+              'direction': 'Right',
+              'pad_to_multiple_of': null,
+              'pad_id': 1,
+              'pad_type_id': 0,
+              'pad_token': '<pad>',
+            };
+
+      final tokenizer = HuggingFaceTokenizerLoader.fromMap(json);
+
+      expect(tokenizer.truncation!.maxLength, 4);
+      expect(tokenizer.encode('aaaaa').length, 4);
+      final batch = tokenizer.encodeBatch(['a', 'aa']);
+      expect(batch.map((encoding) => encoding.ids.toList()).toList(), [
+        [0, 4, 2, 1],
+        [0, 4, 4, 2],
+      ]);
+    });
+
     test('fails on malformed Precompiled base64 instead of ignoring it', () {
       final json = _xlmTokenizerJson(
         pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
@@ -362,7 +535,15 @@ void main() {
     }
 
     final tokenizer = HuggingFaceTokenizerLoader.fromJsonFileSync(path);
-    expect(tokenizer.encode('Hello world').ids, [0, 35378, 8999, 2]);
+    final single = tokenizer.encode('Hello world');
+    expect(single.ids, [0, 35378, 8999, 2]);
+    expect(single.offsets, [(0, 0), (0, 5), (6, 11), (0, 0)]);
+    final pair = tokenizer.encodePair('Hello world', 'Goodbye');
+    expect(pair.ids, [0, 35378, 8999, 2, 2, 18621, 1272, 13, 2]);
+    expect(pair.typeIds, [0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    final batch = tokenizer.encodeBatch(['Hello world', 'Hello world again']);
+    expect(batch[0].ids.toList(), [0, 35378, 8999, 2, 1]);
+    expect(batch[1].ids.toList(), [0, 35378, 8999, 13438, 2]);
     expect(tokenizer.encode('Ｈｅｌｌｏ　ｗｏｒｌｄ').ids, [0, 35378, 8999, 2]);
   });
 }

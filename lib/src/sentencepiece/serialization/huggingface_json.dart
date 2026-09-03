@@ -29,6 +29,9 @@ class _HfMetadata {
   final String padPiece;
   final bool addBosToken;
   final bool addEosToken;
+  final int pairEosTokensBetweenSequences;
+  final int pairTypeId;
+  final int pairSpecialTypeId;
   final List<_HfAddedToken> addedTokens;
   final Set<String> specialContents;
   final List<NormalizerOperation> normalizerOperations;
@@ -49,6 +52,9 @@ class _HfMetadata {
     this.padPiece = '<pad>',
     this.addBosToken = false,
     this.addEosToken = false,
+    this.pairEosTokensBetweenSequences = 1,
+    this.pairTypeId = 1,
+    this.pairSpecialTypeId = 1,
     this.addedTokens = const [],
     this.specialContents = const {},
     this.normalizerOperations = const [],
@@ -60,11 +66,19 @@ class _HfAddedToken {
   final int id;
   final String content;
   final bool special;
+  final bool singleWord;
+  final bool lstrip;
+  final bool rstrip;
+  final bool normalized;
 
   const _HfAddedToken({
     required this.id,
     required this.content,
     required this.special,
+    this.singleWord = false,
+    this.lstrip = false,
+    this.rstrip = false,
+    this.normalized = true,
   });
 }
 
@@ -120,6 +134,9 @@ class HuggingFaceTokenizerLoader {
       finalConfig = SentencePieceConfig(
         addBosToken: meta.addBosToken,
         addEosToken: meta.addEosToken,
+        pairEosTokensBetweenSequences: meta.pairEosTokensBetweenSequences,
+        pairTypeId: meta.pairTypeId,
+        pairSpecialTypeId: meta.pairSpecialTypeId,
       );
     }
 
@@ -139,9 +156,22 @@ class HuggingFaceTokenizerLoader {
     final tokenizer = SentencePieceTokenizer.fromModel(
       model,
       config: finalConfig,
+      addedTokens: [
+        for (final token in meta.addedTokens)
+          SpAddedToken(
+            id: token.id,
+            content: token.content,
+            special: token.special,
+            singleWord: token.singleWord,
+            lstrip: token.lstrip,
+            rstrip: token.rstrip,
+            normalized: token.normalized,
+          ),
+      ],
     );
 
     _applyAddedTokens(tokenizer, meta, model.vocabSize);
+    _applyTokenizerSettings(tokenizer, data);
 
     return tokenizer;
   }
@@ -346,6 +376,10 @@ class HuggingFaceTokenizerLoader {
             id: entry['id'] as int,
             content: entry['content'] as String,
             special: entry['special'] as bool? ?? false,
+            singleWord: entry['single_word'] as bool? ?? false,
+            lstrip: entry['lstrip'] as bool? ?? false,
+            rstrip: entry['rstrip'] as bool? ?? false,
+            normalized: entry['normalized'] as bool? ?? true,
           ),
         );
       }
@@ -403,11 +437,17 @@ class HuggingFaceTokenizerLoader {
 
     bool addBosToken = false;
     bool addEosToken = false;
+    var pairEosTokensBetweenSequences = 1;
+    var pairTypeId = 1;
+    var pairSpecialTypeId = 1;
     final postProcessor = data['post_processor'] as Map<String, dynamic>?;
     if (postProcessor != null) {
       final parsed = _parsePostProcessor(postProcessor, bosPiece, eosPiece);
       addBosToken = parsed.$1;
       addEosToken = parsed.$2;
+      pairEosTokensBetweenSequences = parsed.$3;
+      pairTypeId = parsed.$4;
+      pairSpecialTypeId = parsed.$5;
     }
 
     return _HfMetadata(
@@ -425,6 +465,9 @@ class HuggingFaceTokenizerLoader {
       padPiece: padPiece,
       addBosToken: addBosToken,
       addEosToken: addEosToken,
+      pairEosTokensBetweenSequences: pairEosTokensBetweenSequences,
+      pairTypeId: pairTypeId,
+      pairSpecialTypeId: pairSpecialTypeId,
       addedTokens: addedTokens,
       specialContents: specialContents,
       normalizerOperations: normalizer.operations,
@@ -663,16 +706,19 @@ class HuggingFaceTokenizerLoader {
     return false;
   }
 
-  static (bool, bool) _parsePostProcessor(
+  static (bool, bool, int, int, int) _parsePostProcessor(
     Map<String, dynamic> data,
     String bosPiece,
     String eosPiece,
   ) {
     final type = data['type'] as String?;
-    if (type != 'TemplateProcessing') return (false, false);
+    if (type != 'TemplateProcessing') return (false, false, 1, 1, 1);
 
     bool addBos = false;
     bool addEos = false;
+    var pairEosCount = 0;
+    var pairTypeId = 1;
+    var pairSpecialTypeId = 1;
 
     final single = data['single'] as List?;
     if (single != null && single.isNotEmpty) {
@@ -690,7 +736,25 @@ class HuggingFaceTokenizerLoader {
       }
     }
 
-    return (addBos, addEos);
+    final pair = data['pair'] as List?;
+    if (pair != null) {
+      for (final raw in pair) {
+        if (raw is! Map<String, dynamic>) continue;
+        final sequence = raw['Sequence'];
+        if (sequence is Map<String, dynamic> && sequence['id'] == 'B') {
+          pairTypeId = sequence['type_id'] as int? ?? pairTypeId;
+        }
+        final special = raw['SpecialToken'];
+        if (special is Map<String, dynamic> && special['id'] == eosPiece) {
+          pairEosCount++;
+          pairSpecialTypeId = special['type_id'] as int? ?? pairSpecialTypeId;
+        }
+      }
+    }
+
+    final finalEosCount = addEos && pairEosCount > 0 ? 1 : 0;
+    final eosBetween = pair == null ? 1 : pairEosCount - finalEosCount;
+    return (addBos, addEos, eosBetween, pairTypeId, pairSpecialTypeId);
   }
 
   static void _applyAddedTokens(
@@ -698,20 +762,90 @@ class HuggingFaceTokenizerLoader {
     _HfMetadata meta,
     int baseVocabSize,
   ) {
-    final normalTokens = <String>[];
-    for (final token in meta.addedTokens) {
+    final sortedTokens = [...meta.addedTokens]
+      ..sort((a, b) => a.id.compareTo(b.id));
+    for (final token in sortedTokens) {
       if (token.id < baseVocabSize && tokenizer.vocab.contains(token.content)) {
         continue;
       }
-      if (token.special) {
-        tokenizer.vocab.addSpecialToken(token.content);
-      } else {
-        normalTokens.add(token.content);
+      tokenizer.vocab.addTokenAtId(
+        token.content,
+        token.id,
+        special: token.special,
+      );
+    }
+  }
+
+  static void _applyTokenizerSettings(
+    SentencePieceTokenizer tokenizer,
+    Map<String, dynamic> data,
+  ) {
+    final truncation = data['truncation'];
+    if (truncation is Map<String, dynamic>) {
+      final maxLength = truncation['max_length'];
+      if (maxLength is! int || maxLength <= 0) {
+        throw const FormatException(
+          'Hugging Face truncation is missing a positive max_length',
+        );
       }
+      final stride = truncation['stride'] as int? ?? 0;
+      if (stride != 0) {
+        throw UnsupportedError(
+          'Hugging Face truncation stride is unsupported: $stride',
+        );
+      }
+      tokenizer.enableTruncation(
+        maxLength: maxLength,
+        direction: _parseTruncationDirection(truncation['direction']),
+        strategy: _parseTruncationStrategy(truncation['strategy']),
+      );
     }
-    if (normalTokens.isNotEmpty) {
-      tokenizer.vocab.addTokens(normalTokens);
+
+    final padding = data['padding'];
+    if (padding is Map<String, dynamic>) {
+      tokenizer.enablePadding(
+        direction: _parsePaddingDirection(padding['direction']),
+        length: padding['length'] as int?,
+        padToMultipleOf: padding['pad_to_multiple_of'] as int?,
+        padTokenId: padding['pad_id'] as int?,
+        padToken: padding['pad_token'] as String?,
+        padTypeId: padding['pad_type_id'] as int? ?? 0,
+      );
     }
+  }
+
+  static SpPaddingDirection _parsePaddingDirection(Object? value) {
+    return switch (value?.toString().toLowerCase()) {
+      'left' => SpPaddingDirection.left,
+      null || 'right' => SpPaddingDirection.right,
+      final direction => throw UnsupportedError(
+        'Unsupported Hugging Face padding direction: $direction',
+      ),
+    };
+  }
+
+  static SpTruncationDirection _parseTruncationDirection(Object? value) {
+    return switch (value?.toString().toLowerCase()) {
+      'left' => SpTruncationDirection.left,
+      null || 'right' => SpTruncationDirection.right,
+      final direction => throw UnsupportedError(
+        'Unsupported Hugging Face truncation direction: $direction',
+      ),
+    };
+  }
+
+  static TruncationStrategy _parseTruncationStrategy(Object? value) {
+    return switch (value?.toString().toLowerCase()) {
+      null ||
+      'longestfirst' ||
+      'longest_first' => TruncationStrategy.longestFirst,
+      'onlyfirst' || 'only_first' => TruncationStrategy.onlyFirst,
+      'onlysecond' || 'only_second' => TruncationStrategy.onlySecond,
+      'donottruncate' || 'do_not_truncate' => TruncationStrategy.doNotTruncate,
+      final strategy => throw UnsupportedError(
+        'Unsupported Hugging Face truncation strategy: $strategy',
+      ),
+    };
   }
 
   static bool _isByteToken(String piece) {
