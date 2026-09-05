@@ -11,16 +11,38 @@ class _HfCase {
   const _HfCase({
     required this.input,
     required this.ids,
+    this.tokens,
+    this.typeIds,
+    this.attentionMask,
+    this.specialTokensMask,
     this.offsets,
     this.wordIds,
+    this.sequenceIds,
     this.decoded,
   });
 
   final String input;
   final List<int> ids;
+  final List<String>? tokens;
+  final List<int>? typeIds;
+  final List<int>? attentionMask;
+  final List<int>? specialTokensMask;
   final List<(int, int)>? offsets;
   final List<int?>? wordIds;
+  final List<int?>? sequenceIds;
   final String? decoded;
+}
+
+class _HfPairCase {
+  const _HfPairCase({
+    required this.firstInput,
+    required this.secondInput,
+    required this.expected,
+  });
+
+  final String firstInput;
+  final String secondInput;
+  final _HfCase expected;
 }
 
 class _HfFixture {
@@ -30,7 +52,8 @@ class _HfFixture {
     required this.revision,
     required this.sha256,
     required this.cases,
-    this.batchIds,
+    this.pairCases,
+    this.batchCases,
   });
 
   final String name;
@@ -38,7 +61,8 @@ class _HfFixture {
   final String revision;
   final String sha256;
   final List<_HfCase> cases;
-  final List<List<int>>? batchIds;
+  final List<_HfPairCase>? pairCases;
+  final List<_HfCase>? batchCases;
 
   String get url =>
       'https://huggingface.co/$repository/resolve/$revision/tokenizer.json';
@@ -57,8 +81,13 @@ final _fixtures = <_HfFixture>[
       _HfCase(
         input: 'Hello world',
         ids: [0, 35378, 8999, 2],
+        tokens: ['<s>', '▁Hello', '▁world', '</s>'],
+        typeIds: [0, 0, 0, 0],
+        attentionMask: [1, 1, 1, 1],
+        specialTokensMask: [1, 0, 0, 1],
         offsets: [(0, 0), (0, 5), (6, 11), (0, 0)],
         wordIds: [null, 0, 1, null],
+        sequenceIds: [null, 0, 0, null],
         decoded: 'Hello world',
       ),
       _HfCase(
@@ -67,6 +96,49 @@ final _fixtures = <_HfFixture>[
         offsets: [(0, 0), (0, 5), (6, 11), (12, 17), (0, 0)],
         wordIds: [null, 0, 1, 2, null],
         decoded: 'Hello world again',
+      ),
+      _HfCase(
+        input: 'Hello   world',
+        ids: [0, 35378, 8999, 2],
+        offsets: [(0, 0), (0, 5), (8, 13), (0, 0)],
+        decoded: 'Hello world',
+      ),
+      _HfCase(
+        input: '<s>',
+        ids: [0, 0, 2],
+        tokens: ['<s>', '<s>', '</s>'],
+        typeIds: [0, 0, 0],
+        attentionMask: [1, 1, 1],
+        specialTokensMask: [1, 0, 1],
+        offsets: [(0, 0), (0, 3), (0, 0)],
+        decoded: '',
+      ),
+    ],
+    pairCases: [
+      _HfPairCase(
+        firstInput: 'Hello world',
+        secondInput: 'Goodbye',
+        expected: _HfCase(
+          input: 'Hello world',
+          ids: [0, 35378, 8999, 2, 2, 18621, 1272, 13, 2],
+          tokens: [
+            '<s>',
+            '▁Hello',
+            '▁world',
+            '</s>',
+            '</s>',
+            '▁Good',
+            'by',
+            'e',
+            '</s>',
+          ],
+          typeIds: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+          attentionMask: [1, 1, 1, 1, 1, 1, 1, 1, 1],
+          specialTokensMask: [1, 0, 0, 1, 1, 0, 0, 0, 1],
+          wordIds: [null, 0, 1, null, null, 0, 0, 0, null],
+          sequenceIds: [null, 0, 0, null, null, 1, 1, 1, null],
+          decoded: 'Hello world Goodbye',
+        ),
       ),
     ],
   ),
@@ -79,8 +151,13 @@ final _fixtures = <_HfFixture>[
       _HfCase(
         input: 'Hello world',
         ids: [0, 35378, 8999, 2],
+        tokens: ['<s>', '▁Hello', '▁world', '</s>'],
+        typeIds: [0, 0, 0, 0],
+        attentionMask: [1, 1, 1, 1],
+        specialTokensMask: [1, 0, 0, 1],
         offsets: [(0, 0), (0, 5), (5, 11), (0, 0)],
         wordIds: [null, 0, 1, null],
+        sequenceIds: [null, 0, 0, null],
         decoded: 'Hello world',
       ),
       _HfCase(
@@ -89,6 +166,12 @@ final _fixtures = <_HfFixture>[
         offsets: [(0, 0), (0, 5), (5, 11), (11, 17), (0, 0)],
         wordIds: [null, 0, 1, 2, null],
         decoded: 'Hello world again',
+      ),
+      _HfCase(
+        input: 'Hello   world',
+        ids: [0, 35378, 8999, 2],
+        offsets: [(0, 0), (0, 5), (7, 13), (0, 0)],
+        decoded: 'Hello world',
       ),
     ],
   ),
@@ -101,14 +184,41 @@ final _fixtures = <_HfFixture>[
       _HfCase(
         input: 'Hello world',
         ids: [0, 35378, 8999, 2],
+        tokens: ['<s>', '▁Hello', '▁world', '</s>'],
+        typeIds: [0, 0, 0, 0],
+        attentionMask: [1, 1, 1, 1],
+        specialTokensMask: [1, 0, 0, 1],
         offsets: [(0, 0), (0, 5), (6, 11), (0, 0)],
         wordIds: [null, 0, 1, null],
+        sequenceIds: [null, 0, 0, null],
         decoded: 'Hello world',
       ),
     ],
-    batchIds: [
-      [0, 35378, 8999, 2, 1],
-      [0, 35378, 8999, 13438, 2],
+    batchCases: [
+      _HfCase(
+        input: 'Hello world',
+        ids: [0, 35378, 8999, 2, 1],
+        tokens: ['<s>', '▁Hello', '▁world', '</s>', '<pad>'],
+        typeIds: [0, 0, 0, 0, 0],
+        attentionMask: [1, 1, 1, 1, 0],
+        specialTokensMask: [1, 0, 0, 1, 1],
+        offsets: [(0, 0), (0, 5), (6, 11), (0, 0), (0, 0)],
+        wordIds: [null, 0, 1, null, null],
+        sequenceIds: [null, 0, 0, null, null],
+        decoded: 'Hello world',
+      ),
+      _HfCase(
+        input: 'Hello world again',
+        ids: [0, 35378, 8999, 13438, 2],
+        tokens: ['<s>', '▁Hello', '▁world', '▁again', '</s>'],
+        typeIds: [0, 0, 0, 0, 0],
+        attentionMask: [1, 1, 1, 1, 1],
+        specialTokensMask: [1, 0, 0, 0, 1],
+        offsets: [(0, 0), (0, 5), (6, 11), (12, 17), (0, 0)],
+        wordIds: [null, 0, 1, 2, null],
+        sequenceIds: [null, 0, 0, 0, null],
+        decoded: 'Hello world again',
+      ),
     ],
   ),
   const _HfFixture(
@@ -120,8 +230,13 @@ final _fixtures = <_HfFixture>[
       _HfCase(
         input: 'Hello world',
         ids: [8774, 296, 1],
+        tokens: ['▁Hello', '▁world', '</s>'],
+        typeIds: [0, 0, 0],
+        attentionMask: [1, 1, 1],
+        specialTokensMask: [0, 0, 1],
         offsets: [(0, 5), (6, 11), (0, 0)],
         wordIds: [0, 1, null],
+        sequenceIds: [0, 0, null],
         decoded: 'Hello world',
       ),
       _HfCase(
@@ -145,11 +260,101 @@ final _fixtures = <_HfFixture>[
       _HfCase(
         input: 'Hello world',
         ids: [4521, 2134, 1, ...List<int>.filled(61, 0)],
+        typeIds: List<int>.filled(64, 0),
+        attentionMask: [1, 1, 1, ...List<int>.filled(61, 0)],
+        specialTokensMask: [0, 0, 1, ...List<int>.filled(61, 1)],
+        offsets: [
+          (0, 5),
+          (5, 11),
+          (0, 0),
+          ...List<(int, int)>.filled(61, (0, 0)),
+        ],
+        wordIds: [0, 0, null, ...List<int?>.filled(61, null)],
+        sequenceIds: [0, 0, null, ...List<int?>.filled(61, null)],
         decoded: 'Hello world',
+      ),
+      _HfCase(
+        input: 'room 101 at 3:45pm',
+        ids: [
+          2978,
+          235248,
+          235274,
+          235276,
+          235274,
+          696,
+          235248,
+          235304,
+          235292,
+          235310,
+          235308,
+          3397,
+          1,
+          ...List<int>.filled(51, 0),
+        ],
+        decoded: 'room 101 at 3:45pm',
+      ),
+      _HfCase(
+        input: 'цена 1234,56 руб.',
+        ids: [
+          19440,
+          235248,
+          235274,
+          235284,
+          235304,
+          235310,
+          235269,
+          235308,
+          235318,
+          35232,
+          235265,
+          1,
+          ...List<int>.filled(52, 0),
+        ],
+        decoded: 'цена 1234,56 руб.',
+      ),
+      _HfCase(
+        input: 'a\nb\tc',
+        ids: [235250, 108, 235268, 226, 235260, 1, ...List<int>.filled(58, 0)],
+        decoded: 'a\nb\tc',
+      ),
+      _HfCase(
+        input: 'e-mail: a@b.co',
+        ids: [
+          235249,
+          235290,
+          1765,
+          235292,
+          476,
+          235348,
+          235268,
+          235265,
+          528,
+          1,
+          ...List<int>.filled(54, 0),
+        ],
+        decoded: 'e-mail: a@b.co',
+      ),
+      _HfCase(
+        input: '2026-09-05',
+        ids: [
+          235284,
+          235276,
+          235284,
+          235318,
+          235290,
+          235276,
+          235315,
+          235290,
+          235276,
+          235308,
+          1,
+          ...List<int>.filled(53, 0),
+        ],
+        decoded: '2026-09-05',
       ),
     ],
   ),
-  const _HfFixture(
+  _HfFixture(
     name: 'Gemma-compatible BPE',
     repository: 'pcuenq/gemma-tokenizer',
     revision: '2d1305b81cafe73519bfa0319d00eb8b79f412a6',
@@ -172,7 +377,98 @@ final _fixtures = <_HfFixture>[
           235308,
           3397,
         ],
+        tokens: [
+          '<bos>',
+          'room',
+          '▁',
+          '1',
+          '0',
+          '1',
+          '▁at',
+          '▁',
+          '3',
+          ':',
+          '4',
+          '5',
+          'pm',
+        ],
+        typeIds: List<int>.filled(13, 0),
+        attentionMask: List<int>.filled(13, 1),
+        specialTokensMask: [1, ...List<int>.filled(12, 0)],
+        offsets: [
+          (0, 0),
+          (0, 4),
+          (4, 5),
+          (5, 6),
+          (6, 7),
+          (7, 8),
+          (8, 11),
+          (11, 12),
+          (12, 13),
+          (13, 14),
+          (14, 15),
+          (15, 16),
+          (16, 18),
+        ],
+        wordIds: [null, ...List<int>.filled(12, 0)],
+        sequenceIds: [null, ...List<int?>.filled(12, 0)],
         decoded: 'room 101 at 3:45pm',
+      ),
+      const _HfCase(
+        input: 'цена 1234,56 руб.',
+        ids: [
+          2,
+          19440,
+          235248,
+          235274,
+          235284,
+          235304,
+          235310,
+          235269,
+          235308,
+          235318,
+          35232,
+          235265,
+        ],
+        decoded: 'цена 1234,56 руб.',
+      ),
+      const _HfCase(
+        input: 'a\nb\tc',
+        ids: [2, 235250, 108, 235268, 226, 235260],
+        decoded: 'a\nb\tc',
+      ),
+      const _HfCase(
+        input: 'e-mail: a@b.co',
+        ids: [
+          2,
+          235249,
+          235290,
+          1765,
+          235292,
+          476,
+          235348,
+          235268,
+          235265,
+          528,
+        ],
+        decoded: 'e-mail: a@b.co',
+      ),
+      const _HfCase(
+        input: '2026-09-05',
+        ids: [
+          2,
+          235284,
+          235276,
+          235284,
+          235318,
+          235290,
+          235276,
+          235315,
+          235290,
+          235276,
+          235308,
+        ],
+        decoded: '2026-09-05',
       ),
     ],
   ),
@@ -182,7 +478,14 @@ final _fixtures = <_HfFixture>[
     revision: 'd02ad6cb9dd2c2296a6332199fa2fdca5938fef0',
     sha256: '8eea70c4866c4f1320ba096fc986ac82038a8374dbe135212ba7628835b4a6f1',
     cases: [
-      _HfCase(input: 'Hello world', ids: [1, 15043, 3186]),
+      _HfCase(
+        input: 'Hello world',
+        ids: [1, 15043, 3186],
+        tokens: ['<s>', '▁Hello', '▁world'],
+        typeIds: [0, 0, 0],
+        attentionMask: [1, 1, 1],
+        specialTokensMask: [1, 0, 0],
+      ),
     ],
   ),
 ];
@@ -202,14 +505,40 @@ Future<List<int>> _fetchBytes(HttpClient client, String url) async {
       .timeout(const Duration(seconds: 60));
 }
 
-void _expectCase(SentencePieceTokenizer tokenizer, _HfCase expected) {
-  final encoding = tokenizer.encode(expected.input);
+void _expectEncoding(
+  SentencePieceTokenizer tokenizer,
+  Encoding encoding,
+  _HfCase expected,
+) {
   expect(encoding.ids.toList(), expected.ids, reason: expected.input);
+  if (expected.tokens != null) {
+    expect(encoding.tokens, expected.tokens, reason: expected.input);
+  }
+  if (expected.typeIds != null) {
+    expect(encoding.typeIds.toList(), expected.typeIds, reason: expected.input);
+  }
+  if (expected.attentionMask != null) {
+    expect(
+      encoding.attentionMask.toList(),
+      expected.attentionMask,
+      reason: expected.input,
+    );
+  }
+  if (expected.specialTokensMask != null) {
+    expect(
+      encoding.specialTokensMask.toList(),
+      expected.specialTokensMask,
+      reason: expected.input,
+    );
+  }
   if (expected.offsets != null) {
     expect(encoding.offsets, expected.offsets, reason: expected.input);
   }
   if (expected.wordIds != null) {
     expect(encoding.wordIds, expected.wordIds, reason: expected.input);
+  }
+  if (expected.sequenceIds != null) {
+    expect(encoding.sequenceIds, expected.sequenceIds, reason: expected.input);
   }
   if (expected.decoded != null) {
     expect(
@@ -242,19 +571,33 @@ void main() {
           utf8.decode(bytes),
         );
         for (final expected in fixture.cases) {
-          _expectCase(tokenizer, expected);
+          _expectEncoding(
+            tokenizer,
+            tokenizer.encode(expected.input),
+            expected,
+          );
         }
 
-        if (fixture.batchIds != null) {
-          final batch = tokenizer.encodeBatch([
-            'Hello world',
-            'Hello world again',
-          ]);
+        for (final pair in fixture.pairCases ?? const <_HfPairCase>[]) {
+          _expectEncoding(
+            tokenizer,
+            tokenizer.encodePair(pair.firstInput, pair.secondInput),
+            pair.expected,
+          );
+        }
+
+        if (fixture.batchCases != null) {
+          final batch = tokenizer.encodeBatch(
+            fixture.batchCases!.map((expected) => expected.input).toList(),
+          );
           expect(
-            batch.map((encoding) => encoding.ids.toList()).toList(),
-            fixture.batchIds,
+            batch.length,
+            fixture.batchCases!.length,
             reason: fixture.name,
           );
+          for (var i = 0; i < batch.length; i++) {
+            _expectEncoding(tokenizer, batch[i], fixture.batchCases![i]);
+          }
         }
       } finally {
         client.close(force: true);
