@@ -505,6 +505,21 @@ Future<List<int>> _fetchBytes(HttpClient client, String url) async {
       .timeout(const Duration(seconds: 60));
 }
 
+Future<SentencePieceTokenizer> _loadFixture(_HfFixture fixture) async {
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 30);
+  try {
+    final bytes = await _fetchBytes(client, fixture.url);
+    expect(
+      sha256.convert(bytes).toString(),
+      fixture.sha256,
+      reason: '${fixture.repository}@${fixture.revision}',
+    );
+    return TokenizerJsonLoader.fromJsonString(utf8.decode(bytes));
+  } finally {
+    client.close(force: true);
+  }
+}
+
 void _expectEncoding(
   SentencePieceTokenizer tokenizer,
   Encoding encoding,
@@ -551,56 +566,84 @@ void _expectEncoding(
 
 void main() {
   for (final fixture in _fixtures) {
-    test('loads pinned Hugging Face fixture: ${fixture.name}', () async {
-      if (Platform.environment[_runNetworkTests] != '1') {
-        markTestSkipped('Set $_runNetworkTests=1 to run Hugging Face fixtures');
-        return;
+    group('pinned Hugging Face fixture: ${fixture.name}', () {
+      SentencePieceTokenizer? tokenizer;
+      Object? loadError;
+      StackTrace? loadStack;
+
+      setUpAll(() async {
+        if (Platform.environment[_runNetworkTests] != '1') {
+          return;
+        }
+        try {
+          tokenizer = await _loadFixture(fixture);
+        } catch (error, stackTrace) {
+          loadError = error;
+          loadStack = stackTrace;
+        }
+      });
+
+      bool skipUnavailable() {
+        if (Platform.environment[_runNetworkTests] != '1') {
+          markTestSkipped(
+            'Set $_runNetworkTests=1 to run Hugging Face fixtures',
+          );
+          return true;
+        }
+        if (loadError != null) {
+          markTestSkipped('Fixture failed to load: $loadError');
+          return true;
+        }
+        return false;
       }
 
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 30);
-      try {
-        final bytes = await _fetchBytes(client, fixture.url);
-        expect(
-          sha256.convert(bytes).toString(),
-          fixture.sha256,
-          reason: '${fixture.repository}@${fixture.revision}',
-        );
+      test('loads fixture', () {
+        if (Platform.environment[_runNetworkTests] != '1') {
+          markTestSkipped(
+            'Set $_runNetworkTests=1 to run Hugging Face fixtures',
+          );
+          return;
+        }
+        if (loadError != null) {
+          fail('Fixture failed to load: $loadError\n$loadStack');
+        }
+        expect(tokenizer, isNotNull);
+      });
 
-        final tokenizer = TokenizerJsonLoader.fromJsonString(
-          utf8.decode(bytes),
-        );
-        for (final expected in fixture.cases) {
+      for (final expected in fixture.cases) {
+        test('encodes ${expected.input}', () {
+          if (skipUnavailable()) return;
           _expectEncoding(
-            tokenizer,
-            tokenizer.encode(expected.input),
+            tokenizer!,
+            tokenizer!.encode(expected.input),
             expected,
           );
-        }
+        });
+      }
 
-        for (final pair in fixture.pairCases ?? const <_HfPairCase>[]) {
+      for (final pair in fixture.pairCases ?? const <_HfPairCase>[]) {
+        test('encodes pair ${pair.firstInput} / ${pair.secondInput}', () {
+          if (skipUnavailable()) return;
           _expectEncoding(
-            tokenizer,
-            tokenizer.encodePair(pair.firstInput, pair.secondInput),
+            tokenizer!,
+            tokenizer!.encodePair(pair.firstInput, pair.secondInput),
             pair.expected,
           );
-        }
+        });
+      }
 
-        if (fixture.batchCases != null) {
-          final batch = tokenizer.encodeBatch(
-            fixture.batchCases!.map((expected) => expected.input).toList(),
-          );
-          expect(
-            batch.length,
-            fixture.batchCases!.length,
-            reason: fixture.name,
-          );
-          for (var i = 0; i < batch.length; i++) {
-            _expectEncoding(tokenizer, batch[i], fixture.batchCases![i]);
-          }
+      final batchCases = fixture.batchCases;
+      if (batchCases != null) {
+        for (var i = 0; i < batchCases.length; i++) {
+          test('encodes batch item $i: ${batchCases[i].input}', () {
+            if (skipUnavailable()) return;
+            final batch = tokenizer!.encodeBatch(
+              batchCases.map((expected) => expected.input).toList(),
+            );
+            expect(batch.length, batchCases.length, reason: fixture.name);
+            _expectEncoding(tokenizer!, batch[i], batchCases[i]);
+          });
         }
-      } finally {
-        client.close(force: true);
       }
     });
   }
