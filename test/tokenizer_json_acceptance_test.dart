@@ -185,6 +185,109 @@ void main() {
       expect(tokenizer.tokenize('hello world'), ['hello', '▁world']);
     });
 
+    // The Gemma family (SigLIP 2's text tower among them) pairs this Split with
+    // a Replace normalizer that turns every space into U+2581. Hugging Face
+    // normalizes before pre-tokenizing, so the delimiter is already gone by the
+    // time the Split runs and it matches nothing.
+    const gemmaSplit = {
+      'type': 'Split',
+      'pattern': {'String': ' '},
+      'behavior': 'MergedWithPrevious',
+      'invert': false,
+    };
+    const escapingNormalizer = {
+      'type': 'Replace',
+      'pattern': {'String': ' '},
+      'content': '\u2581',
+    };
+
+    test('ignores a Split whose delimiter the normalizer already removed', () {
+      final json = _xlmTokenizerJson(
+        pieces: ['<s>', '<pad>', '</s>', '<unk>', 'hello', '\u2581world'],
+        normalizer: escapingNormalizer,
+        preTokenizer: gemmaSplit,
+      );
+
+      final tokenizer = HuggingFaceTokenizerLoader.fromMap(json);
+
+      // A bare Replace, as the real files ship it: no Prepend, so the first
+      // piece carries no marker and only the space becomes one.
+      expect(tokenizer.tokenize('hello world'), ['hello', '\u2581world']);
+
+      // The Split still ran and produced one piece covering the input, so both
+      // tokens belong to word 0 — matching Hugging Face, which indexes the
+      // single split rather than leaving it unset.
+      expect(tokenizer.encode('hello world').wordIds, [0, 0]);
+    });
+
+    test('rejects a Split whose delimiter survives normalization', () {
+      // Without the escaping normalizer the space reaches the pre-tokenizer, so
+      // Hugging Face really would split on it. Ignoring it here would merge
+      // across a boundary it keeps, silently.
+      final json = _xlmTokenizerJson(
+        pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+        normalizer: _emptyNormalizer,
+        preTokenizer: gemmaSplit,
+      );
+
+      expect(
+        () => HuggingFaceTokenizerLoader.fromMap(json),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('rejects a Split with a Regex pattern', () {
+      final json = _xlmTokenizerJson(
+        pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+        normalizer: escapingNormalizer,
+        preTokenizer: {
+          'type': 'Split',
+          'pattern': {'Regex': r'\s+'},
+          'behavior': 'MergedWithPrevious',
+          'invert': false,
+        },
+      );
+
+      expect(
+        () => HuggingFaceTokenizerLoader.fromMap(json),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('rejects an inverted Split', () {
+      final json = _xlmTokenizerJson(
+        pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+        normalizer: escapingNormalizer,
+        preTokenizer: {
+          'type': 'Split',
+          'pattern': {'String': ' '},
+          'behavior': 'MergedWithPrevious',
+          'invert': true,
+        },
+      );
+
+      expect(
+        () => HuggingFaceTokenizerLoader.fromMap(json),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('validates a Split nested in a Sequence instead of skipping it', () {
+      final json = _xlmTokenizerJson(
+        pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+        normalizer: _emptyNormalizer,
+        preTokenizer: {
+          'type': 'Sequence',
+          'pretokenizers': [gemmaSplit],
+        },
+      );
+
+      expect(
+        () => HuggingFaceTokenizerLoader.fromMap(json),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
     test('applies WhitespaceSplit then Metaspace to all whitespace', () {
       final json = _xlmTokenizerJson(
         pieces: ['<s>', '<pad>', '</s>', '<unk>', '▁hello', '▁world', '▁again'],
