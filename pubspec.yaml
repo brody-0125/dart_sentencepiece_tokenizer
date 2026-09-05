@@ -17,5 +17,6 @@ dependencies:
   # No external dependencies - pure Dart implementation
 
 dev_dependencies:
+  crypto: ^3.0.7
   lints: ^6.0.0
   test: ^1.25.6

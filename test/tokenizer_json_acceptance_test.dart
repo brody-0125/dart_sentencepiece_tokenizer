@@ -64,6 +64,28 @@ Map<String, dynamic> _xlmTemplateProcessor() {
   };
 }
 
+void _expectUnsupportedSplit({
+  required Object pattern,
+  required String behavior,
+  required bool invert,
+}) {
+  final json = _xlmTokenizerJson(
+    pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+    normalizer: _emptyNormalizer,
+    preTokenizer: {
+      'type': 'Split',
+      'pattern': pattern,
+      'behavior': behavior,
+      'invert': invert,
+    },
+  );
+
+  expect(
+    () => HuggingFaceTokenizerLoader.fromMap(json),
+    throwsA(isA<UnsupportedError>()),
+  );
+}
+
 void main() {
   group('tokenizer.json acceptance coverage', () {
     test(
@@ -466,6 +488,38 @@ void main() {
       expect(
         () => HuggingFaceTokenizerLoader.fromMap(json),
         throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('rejects Split with a Regex pattern', () {
+      _expectUnsupportedSplit(
+        pattern: {'Regex': r'\s+'},
+        behavior: 'MergedWithPrevious',
+        invert: false,
+      );
+    });
+
+    test('rejects Split with Isolated behavior', () {
+      _expectUnsupportedSplit(
+        pattern: {'String': ' '},
+        behavior: 'Isolated',
+        invert: false,
+      );
+    });
+
+    test('rejects Split with Removed behavior', () {
+      _expectUnsupportedSplit(
+        pattern: {'String': ' '},
+        behavior: 'Removed',
+        invert: false,
+      );
+    });
+
+    test('rejects Split with invert enabled', () {
+      _expectUnsupportedSplit(
+        pattern: {'String': ' '},
+        behavior: 'MergedWithPrevious',
+        invert: true,
       );
     });
 
