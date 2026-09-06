@@ -392,6 +392,7 @@ class HuggingFaceTokenizerLoader {
     final normalizer = _parseNormalizer(normalizerData);
     final preTokenizer = _parsePreTokenizer(
       data['pre_tokenizer'] as Map<String, dynamic>?,
+      provesLiteralSpacesAbsent: normalizer.provesLiteralSpacesAbsent,
     );
     var addDummyPrefix = normalizer.addDummyPrefix;
     var escapeWhitespaces = normalizer.escapeWhitespaces;
@@ -451,6 +452,7 @@ class HuggingFaceTokenizerLoader {
   static ({
     bool addDummyPrefix,
     bool escapeWhitespaces,
+    bool provesLiteralSpacesAbsent,
     bool removeExtraWhitespaces,
     List<NormalizerOperation> operations,
   })
@@ -459,6 +461,7 @@ class HuggingFaceTokenizerLoader {
       return (
         addDummyPrefix: true,
         escapeWhitespaces: true,
+        provesLiteralSpacesAbsent: false,
         removeExtraWhitespaces: false,
         operations: const [],
       );
@@ -466,6 +469,11 @@ class HuggingFaceTokenizerLoader {
 
     var addDummyPrefix = false;
     var escapeWhitespaces = false;
+    // This is not a Hugging Face tokenizer setting.
+    //
+    // It is a conservative proof used only to determine whether a
+    // literal-space Split is guaranteed to be a no-op after normalization.
+    var provesLiteralSpacesAbsent = false;
     const removeExtraWhitespaces = false;
     final operations = <NormalizerOperation>[];
 
@@ -488,6 +496,7 @@ class HuggingFaceTokenizerLoader {
             visit(raw);
           }
         case 'Precompiled':
+          provesLiteralSpacesAbsent = false;
           final encoded = normalizer['precompiled_charsmap'];
           if (encoded is! String || encoded.isEmpty) {
             throw const FormatException(
@@ -511,6 +520,7 @@ class HuggingFaceTokenizerLoader {
             );
           }
           if (prepend == '\u2581' || prepend == ' ') addDummyPrefix = true;
+          if (prepend.contains(' ')) provesLiteralSpacesAbsent = false;
           operations.add(
             NormalizerOperation(type: 'Prepend', replacement: prepend),
           );
@@ -528,6 +538,24 @@ class HuggingFaceTokenizerLoader {
             throw FormatException('Invalid Replace normalizer pattern: $error');
           }
           if (replacement == '\u2581') escapeWhitespaces = true;
+          final rawPattern = normalizer['pattern'];
+          final isSpacePattern =
+              rawPattern is Map<String, dynamic> &&
+              rawPattern.length == 1 &&
+              rawPattern['String'] == ' ';
+          final isMarkerPattern =
+              rawPattern is Map<String, dynamic> &&
+              rawPattern.length == 1 &&
+              rawPattern['String'] == '\u2581';
+          if (isSpacePattern && replacement == '\u2581') {
+            provesLiteralSpacesAbsent = true;
+          } else if (isSpacePattern ||
+              replacement.contains(' ') ||
+              isMarkerPattern ||
+              rawPattern is Map<String, dynamic> &&
+                  rawPattern['Regex'] is String) {
+            provesLiteralSpacesAbsent = false;
+          }
           operations.add(
             NormalizerOperation(
               type: 'Replace',
@@ -550,6 +578,7 @@ class HuggingFaceTokenizerLoader {
     return (
       addDummyPrefix: addDummyPrefix,
       escapeWhitespaces: escapeWhitespaces,
+      provesLiteralSpacesAbsent: provesLiteralSpacesAbsent,
       removeExtraWhitespaces: removeExtraWhitespaces,
       operations: hasPrecompiled ? List.unmodifiable(operations) : const [],
     );
@@ -576,7 +605,10 @@ class HuggingFaceTokenizerLoader {
     );
   }
 
-  static PreTokenizerSpec? _parsePreTokenizer(Map<String, dynamic>? data) {
+  static PreTokenizerSpec? _parsePreTokenizer(
+    Map<String, dynamic>? data, {
+    required bool provesLiteralSpacesAbsent,
+  }) {
     if (data == null) return null;
 
     final type = data['type'] as String?;
@@ -587,6 +619,11 @@ class HuggingFaceTokenizerLoader {
         return const PreTokenizerSpec(
           whitespaceSplit: true,
           useMetaspace: false,
+        );
+      case 'Split':
+        return _parseSplit(
+          data,
+          provesLiteralSpacesAbsent: provesLiteralSpacesAbsent,
         );
       case 'Sequence':
         final rawPreTokenizers = data['pretokenizers'];
@@ -618,6 +655,11 @@ class HuggingFaceTokenizerLoader {
               );
             }
             metaspace = _parseMetaspace(raw);
+          } else if (childType == 'Split') {
+            _parseSplit(
+              raw,
+              provesLiteralSpacesAbsent: provesLiteralSpacesAbsent,
+            );
           } else {
             throw UnsupportedError(
               'Unsupported Hugging Face pre-tokenizer: $childType',
@@ -640,6 +682,39 @@ class HuggingFaceTokenizerLoader {
       default:
         throw UnsupportedError('Unsupported Hugging Face pre-tokenizer: $type');
     }
+  }
+
+  static PreTokenizerSpec _parseSplit(
+    Map<String, dynamic> data, {
+    required bool provesLiteralSpacesAbsent,
+  }) {
+    final pattern = data['pattern'];
+    final behavior = data['behavior'] as String?;
+    final invert = data['invert'] as bool? ?? false;
+
+    // Gemma-family files (SigLIP 2's text tower among them) pair this Split
+    // with a Replace normalizer that turns every space into U+2581. Hugging
+    // Face normalizes before pre-tokenizing, so the delimiter is already gone
+    // and the Split matches nothing -- which is why 1.3.3, with no
+    // pre-tokenizer parsing at all, produced correct ids. Without that
+    // normalizer the delimiter survives and the split is real, so the
+    // acceptance is conditioned on it rather than on the Split alone.
+    final unreachablePattern =
+        provesLiteralSpacesAbsent &&
+        pattern is Map &&
+        pattern.length == 1 &&
+        pattern['String'] == ' ';
+    if (unreachablePattern && !invert) {
+      return const PreTokenizerSpec(
+        whitespaceSplit: false,
+        useMetaspace: false,
+      );
+    }
+    throw UnsupportedError(
+      'Unsupported Hugging Face pre-tokenizer: Split with '
+      'pattern=${jsonEncode(pattern)}, behavior=$behavior, invert=$invert'
+      '${provesLiteralSpacesAbsent ? '' : ' (normalizer may emit literal spaces)'}',
+    );
   }
 
   static PreTokenizerSpec _parseMetaspace(Map<String, dynamic> data) {
@@ -776,9 +851,15 @@ class HuggingFaceTokenizerLoader {
 
     final padding = data['padding'];
     if (padding is Map<String, dynamic>) {
+      int? length = padding['length'] as int?;
+      final strategy = padding['strategy'];
+      if (strategy is Map<String, dynamic>) {
+        final fixedLength = strategy['Fixed'];
+        if (fixedLength is int) length = fixedLength;
+      }
       tokenizer.enablePadding(
         direction: _parsePaddingDirection(padding['direction']),
-        length: padding['length'] as int?,
+        length: length,
         padToMultipleOf: padding['pad_to_multiple_of'] as int?,
         padTokenId: padding['pad_id'] as int?,
         padToken: padding['pad_token'] as String?,

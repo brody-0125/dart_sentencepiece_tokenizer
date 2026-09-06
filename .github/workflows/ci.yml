@@ -39,3 +39,16 @@ jobs:
           sdk: ${{ matrix.sdk }}
       - run: dart pub get
       - run: dart test
+
+  huggingface-fixtures:
+    name: Hugging Face Fixtures (network)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: "3.13.2"
+      - run: dart pub get
+      - run: dart test test/huggingface_network_test.dart
+        env:
+          RUN_HF_NETWORK_TESTS: "1"

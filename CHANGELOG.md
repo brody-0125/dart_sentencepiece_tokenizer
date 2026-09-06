@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-09-06
+
+### Changed
+
+- No-op Hugging Face `Split` pre-tokenizers preserve the 1.3.3 token IDs,
+  tokens, offsets, masks, sequence IDs, and decoded text, while now assigning
+  Hugging Face-compatible word ID 0 to their single pre-tokenized segment.
+
+### Fixed
+
+- Restored compatibility with Gemma-family Hugging Face `tokenizer.json` files that declare a no-op `Split` pre-tokenizer (#35).
+  - The form is accepted only when the normalizer converts literal spaces (`U+0020`) to SentencePiece whitespace (`U+2581`) before pre-tokenization.
+  - Other `Split` patterns, behaviors, and inverted matches remain rejected rather than being silently mis-tokenized.
+
+### Added
+
+- Added pinned Hugging Face network fixture coverage for XLM-R, E5, MiniLM, T5, Gemma, SigLIP2, and Llama tokenizer pipelines.
+- Added regression coverage for the accepted normalizer-guarded `Split` form and unsupported `Split` variants.
+
 ## [1.4.0] - 2026-09-04
 
 ### Added
