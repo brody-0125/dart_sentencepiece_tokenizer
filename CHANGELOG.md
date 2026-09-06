@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- No-op Hugging Face `Split` pre-tokenizers preserve the 1.3.3 token IDs,
+  tokens, offsets, masks, sequence IDs, and decoded text, while now assigning
+  Hugging Face-compatible word ID 0 to their single pre-tokenized segment.
+
 ### Fixed
 
 - Accept the no-op `Split` pre-tokenizer that Gemma-family `tokenizer.json` files declare (#35).
