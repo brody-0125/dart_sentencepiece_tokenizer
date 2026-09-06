@@ -23,15 +23,15 @@ A lightweight, pure Dart implementation of SentencePiece tokenizer. Supports BPE
 - **Batch Processing** - Sequential and parallel (Isolate-based) batch encoding
 - **Streaming API** - HuggingFace TextStreamer compatible for real-time LLM output
 - **HuggingFace Compatible** - JSON serialization, dynamic token addition, tokenize() API
-- **HuggingFace tokenizer.json** - Load SentencePiece BPE/Unigram tokenizers, including Precompiled normalizers and Metaspace pipelines
-- **CI/CD** - GitHub Actions with format check, lint, and multi-version testing
-- **Well Tested** - 354+ tests with 100% pass rate
+- **HuggingFace tokenizer.json** - Load SentencePiece BPE/Unigram tokenizers, including Precompiled normalizers, Metaspace pipelines, and Gemma-compatible `Split` metadata
+- **CI/CD** - GitHub Actions with format check, lint, multi-version testing, and pinned Hugging Face fixture coverage
+- **Well Tested** - 364+ tests, plus 38 opt-in Hugging Face network fixture cases
 
 ## Installation
 
 ```yaml
 dependencies:
-  dart_sentencepiece_tokenizer: ^1.4.0
+  dart_sentencepiece_tokenizer: ^1.4.1
 ```
 
 ## Quick Start
@@ -259,7 +259,7 @@ final loadedSync = TokenizerJsonLoader.fromJsonFileSync('tokenizer.json');
 final fromString = TokenizerJsonLoader.fromJsonString(jsonString);
 ```
 
-### HuggingFace tokenizer.json Loading (v1.3.1+, expanded in v1.4.0)
+### HuggingFace tokenizer.json Loading (v1.3.1+, expanded in v1.4.0 and v1.4.1)
 
 Load SentencePiece-based tokenizers directly from HuggingFace `tokenizer.json` format, including multilingual models such as XLM-R and MiniLM that distribute their normalizer, pre-tokenizer, and post-processor configuration in JSON.
 
@@ -294,15 +294,16 @@ if (TokenizerJsonLoader.isHuggingFaceFormat(data)) {
 - Special token detection (unk, bos, eos, pad)
 - Direct and nested `Precompiled` normalizers with ordered `Replace` operations
 - `WhitespaceSplit` and `Metaspace` pre-tokenizers, including current and legacy configuration fields
-- `Split` pre-tokenizers whose delimiter the normalizer has already removed, as the Gemma family ships
+- The Gemma-family no-op `Split` form when the normalizer has already converted literal spaces to `▁`
 - `TemplateProcessing` BOS/EOS post-processing with declared special-token IDs
 - Tokenizer-level padding and truncation settings, preserving post-processor special tokens
 - Unigram consecutive unknown-token fusion (`fuse_unk`)
 - Byte fallback from decoder configuration
 - Added tokens beyond base vocabulary
 
-Malformed required precompiled data and unsupported required pipeline components
-fail explicitly instead of silently falling back to identity behavior.
+Malformed required precompiled data and unsupported required pipeline components,
+including non-equivalent `Split` configurations, fail explicitly instead of
+silently falling back to identity behavior.
 
 ### Decoding
 
@@ -524,12 +525,12 @@ Download SentencePiece models from HuggingFace:
 
 **Supported formats:**
 - Binary protobuf (`.model` files from SentencePiece C++ library)
-- HuggingFace `tokenizer.json` (auto-detected, v1.3.1+; expanded in v1.4.0)
+- HuggingFace `tokenizer.json` (auto-detected, v1.3.1+; expanded in v1.4.0 and v1.4.1)
 
 ## Testing
 
 ```bash
-# Run all tests (354+ tests)
+# Run all local tests (364+ tests; network fixtures are opt-in)
 dart test
 
 # Run specific test file
@@ -541,7 +542,7 @@ dart run benchmark/performance_benchmark.dart
 # Run HuggingFace compatibility benchmark
 dart run benchmark/hf_compatibility_benchmark.dart
 
-# Run official Hugging Face tokenizer.json fetch/load coverage
+# Run official Hugging Face tokenizer.json fetch/load coverage (38 cases)
 # Set RUN_HF_NETWORK_TESTS=1 in your shell before running this command.
 dart test test/huggingface_network_test.dart
 
