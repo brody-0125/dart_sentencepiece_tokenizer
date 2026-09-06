@@ -43,9 +43,6 @@ jobs:
   huggingface-fixtures:
     name: Hugging Face Fixtures (network)
     runs-on: ubuntu-latest
-    # SigLIP2 and Gemma fixtures intentionally expose the pending Split
-    # parser contribution. Remove this once that support is merged.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dart-lang/setup-dart@v1

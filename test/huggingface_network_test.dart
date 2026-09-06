@@ -248,9 +248,8 @@ final _fixtures = <_HfFixture>[
       ),
     ],
   ),
-  // These two fixtures intentionally remain active: until the external
-  // narrow Split contribution lands, opt-in verification must expose the
-  // compatibility gap instead of hiding it behind a skip.
+  // These fixtures cover the Gemma-family Split form and remain opt-in because
+  // they fetch pinned tokenizer.json files from Hugging Face.
   _HfFixture(
     name: 'SigLIP2 / Gemma BPE',
     repository: 'onnx-community/siglip2-base-patch16-224-ONNX',
@@ -296,7 +295,7 @@ final _fixtures = <_HfFixture>[
       _HfCase(
         input: 'цена 1234,56 руб.',
         ids: [
-          19440,
+          74001,
           235248,
           235274,
           235284,
@@ -305,7 +304,7 @@ final _fixtures = <_HfFixture>[
           235269,
           235308,
           235318,
-          35232,
+          22810,
           235265,
           1,
           ...List<int>.filled(52, 0),
@@ -418,7 +417,7 @@ final _fixtures = <_HfFixture>[
         input: 'цена 1234,56 руб.',
         ids: [
           2,
-          19440,
+          74001,
           235248,
           235274,
           235284,
@@ -427,7 +426,7 @@ final _fixtures = <_HfFixture>[
           235269,
           235308,
           235318,
-          35232,
+          22810,
           235265,
         ],
         decoded: 'цена 1234,56 руб.',

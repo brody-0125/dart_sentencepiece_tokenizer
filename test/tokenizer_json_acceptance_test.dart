@@ -310,6 +310,22 @@ void main() {
       );
     });
 
+    test('rejects Split with Isolated behavior', () {
+      _expectUnsupportedSplit(
+        pattern: {'String': ' '},
+        behavior: 'Isolated',
+        invert: false,
+      );
+    });
+
+    test('rejects Split with Removed behavior', () {
+      _expectUnsupportedSplit(
+        pattern: {'String': ' '},
+        behavior: 'Removed',
+        invert: false,
+      );
+    });
+
     test('applies WhitespaceSplit then Metaspace to all whitespace', () {
       final json = _xlmTokenizerJson(
         pieces: ['<s>', '<pad>', '</s>', '<unk>', '▁hello', '▁world', '▁again'],
@@ -576,6 +592,27 @@ void main() {
           parallelBatch.map((encoding) => encoding.ids.toList()).toList(),
           List.filled(8, [0, 4, 4, 2]),
         );
+
+        final fixedPaddingJson =
+            _xlmTokenizerJson(
+                pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+                normalizer: _emptyNormalizer,
+                postProcessor: _xlmTemplateProcessor(),
+              )
+              ..['padding'] = {
+                'strategy': {'Fixed': 4},
+                'direction': 'Right',
+                'pad_to_multiple_of': null,
+                'pad_id': 1,
+                'pad_type_id': 0,
+                'pad_token': '<pad>',
+              };
+        final fixedPaddingTokenizer = HuggingFaceTokenizerLoader.fromMap(
+          fixedPaddingJson,
+        );
+        final fixedPaddingEncoding = fixedPaddingTokenizer.encode('a');
+        expect(fixedPaddingEncoding.ids.toList(), [0, 4, 2, 1]);
+        expect(fixedPaddingEncoding.attentionMask.toList(), [1, 1, 1, 0]);
       },
     );
 
@@ -591,38 +628,6 @@ void main() {
       expect(
         () => HuggingFaceTokenizerLoader.fromMap(json),
         throwsA(isA<FormatException>()),
-      );
-    });
-
-    test('rejects Split with a Regex pattern', () {
-      _expectUnsupportedSplit(
-        pattern: {'Regex': r'\s+'},
-        behavior: 'MergedWithPrevious',
-        invert: false,
-      );
-    });
-
-    test('rejects Split with Isolated behavior', () {
-      _expectUnsupportedSplit(
-        pattern: {'String': ' '},
-        behavior: 'Isolated',
-        invert: false,
-      );
-    });
-
-    test('rejects Split with Removed behavior', () {
-      _expectUnsupportedSplit(
-        pattern: {'String': ' '},
-        behavior: 'Removed',
-        invert: false,
-      );
-    });
-
-    test('rejects Split with invert enabled', () {
-      _expectUnsupportedSplit(
-        pattern: {'String': ' '},
-        behavior: 'MergedWithPrevious',
-        invert: true,
       );
     });
 

@@ -817,9 +817,15 @@ class HuggingFaceTokenizerLoader {
 
     final padding = data['padding'];
     if (padding is Map<String, dynamic>) {
+      int? length = padding['length'] as int?;
+      final strategy = padding['strategy'];
+      if (strategy is Map<String, dynamic>) {
+        final fixedLength = strategy['Fixed'];
+        if (fixedLength is int) length = fixedLength;
+      }
       tokenizer.enablePadding(
         direction: _parsePaddingDirection(padding['direction']),
-        length: padding['length'] as int?,
+        length: length,
         padToMultipleOf: padding['pad_to_multiple_of'] as int?,
         padTokenId: padding['pad_id'] as int?,
         padToken: padding['pad_token'] as String?,
