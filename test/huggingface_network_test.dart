@@ -98,6 +98,27 @@ final _fixtures = <_HfFixture>[
         decoded: 'Hello world again',
       ),
       _HfCase(
+        input: 'a\tb\nc\r\nd',
+        ids: [0, 10, 876, 501, 104, 2],
+        typeIds: [0, 0, 0, 0, 0, 0],
+        attentionMask: [1, 1, 1, 1, 1, 1],
+        specialTokensMask: [1, 0, 0, 0, 0, 1],
+        offsets: [(0, 0), (0, 1), (2, 3), (4, 5), (7, 8), (0, 0)],
+        wordIds: [null, 0, 1, 2, 3, null],
+        sequenceIds: [null, 0, 0, 0, 0, null],
+        decoded: 'a b c d',
+      ),
+      _HfCase(
+        input: '你好世界，这是一个测试。',
+        ids: [0, 6, 124084, 3221, 4, 100013, 49125, 30, 2],
+        decoded: '你好世界,这是一个测试。',
+      ),
+      _HfCase(
+        input: 'Hello 😊 👩‍💻',
+        ids: [0, 35378, 6, 82803, 6, 244785, 6, 246382, 2],
+        decoded: 'Hello 😊 👩 💻',
+      ),
+      _HfCase(
         input: 'Hello   world',
         ids: [0, 35378, 8999, 2],
         offsets: [(0, 0), (0, 5), (8, 13), (0, 0)],
@@ -246,11 +267,43 @@ final _fixtures = <_HfFixture>[
         wordIds: [0, 1, 2, null],
         decoded: 'Hello world again',
       ),
+      _HfCase(input: '你好世界', ids: [3, 2, 1], decoded: ''),
+      _HfCase(input: '1️⃣ 👩‍💻', ids: [209, 2, 3, 2, 3, 2, 1], decoded: '1  '),
+      _HfCase(
+        input:
+            'word word word word word word word word word word '
+            'word word word word word word word word word word ',
+        ids: [
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1448,
+          1,
+        ],
+        decoded:
+            'word word word word word word word word word word '
+            'word word word word word word word word word word',
+      ),
     ],
   ),
-  // These two fixtures intentionally remain active: until the external
-  // narrow Split contribution lands, opt-in verification must expose the
-  // compatibility gap instead of hiding it behind a skip.
+  // These fixtures cover the Gemma-family Split form and remain opt-in because
+  // they fetch pinned tokenizer.json files from Hugging Face.
   _HfFixture(
     name: 'SigLIP2 / Gemma BPE',
     repository: 'onnx-community/siglip2-base-patch16-224-ONNX',
@@ -296,7 +349,7 @@ final _fixtures = <_HfFixture>[
       _HfCase(
         input: 'цена 1234,56 руб.',
         ids: [
-          19440,
+          74001,
           235248,
           235274,
           235284,
@@ -305,7 +358,7 @@ final _fixtures = <_HfFixture>[
           235269,
           235308,
           235318,
-          35232,
+          22810,
           235265,
           1,
           ...List<int>.filled(52, 0),
@@ -418,7 +471,7 @@ final _fixtures = <_HfFixture>[
         input: 'цена 1234,56 руб.',
         ids: [
           2,
-          19440,
+          74001,
           235248,
           235274,
           235284,
@@ -427,7 +480,7 @@ final _fixtures = <_HfFixture>[
           235269,
           235308,
           235318,
-          35232,
+          22810,
           235265,
         ],
         decoded: 'цена 1234,56 руб.',
