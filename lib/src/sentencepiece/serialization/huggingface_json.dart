@@ -392,7 +392,7 @@ class HuggingFaceTokenizerLoader {
     final normalizer = _parseNormalizer(normalizerData);
     final preTokenizer = _parsePreTokenizer(
       data['pre_tokenizer'] as Map<String, dynamic>?,
-      escapeWhitespaces: normalizer.escapeWhitespaces,
+      hasSpaceEscapeNormalizer: normalizer.hasSpaceEscapeNormalizer,
     );
     var addDummyPrefix = normalizer.addDummyPrefix;
     var escapeWhitespaces = normalizer.escapeWhitespaces;
@@ -452,6 +452,7 @@ class HuggingFaceTokenizerLoader {
   static ({
     bool addDummyPrefix,
     bool escapeWhitespaces,
+    bool hasSpaceEscapeNormalizer,
     bool removeExtraWhitespaces,
     List<NormalizerOperation> operations,
   })
@@ -460,6 +461,7 @@ class HuggingFaceTokenizerLoader {
       return (
         addDummyPrefix: true,
         escapeWhitespaces: true,
+        hasSpaceEscapeNormalizer: false,
         removeExtraWhitespaces: false,
         operations: const [],
       );
@@ -467,6 +469,7 @@ class HuggingFaceTokenizerLoader {
 
     var addDummyPrefix = false;
     var escapeWhitespaces = false;
+    var hasSpaceEscapeNormalizer = false;
     const removeExtraWhitespaces = false;
     final operations = <NormalizerOperation>[];
 
@@ -489,6 +492,7 @@ class HuggingFaceTokenizerLoader {
             visit(raw);
           }
         case 'Precompiled':
+          hasSpaceEscapeNormalizer = false;
           final encoded = normalizer['precompiled_charsmap'];
           if (encoded is! String || encoded.isEmpty) {
             throw const FormatException(
@@ -529,6 +533,22 @@ class HuggingFaceTokenizerLoader {
             throw FormatException('Invalid Replace normalizer pattern: $error');
           }
           if (replacement == '\u2581') escapeWhitespaces = true;
+          final rawPattern = normalizer['pattern'];
+          final isSpacePattern =
+              rawPattern is Map<String, dynamic> &&
+              rawPattern.length == 1 &&
+              rawPattern['String'] == ' ';
+          final isMarkerPattern =
+              rawPattern is Map<String, dynamic> &&
+              rawPattern.length == 1 &&
+              rawPattern['String'] == '\u2581';
+          if (isSpacePattern) {
+            hasSpaceEscapeNormalizer = replacement == '\u2581';
+          } else if (isMarkerPattern ||
+              rawPattern is Map<String, dynamic> &&
+                  rawPattern['Regex'] is String) {
+            hasSpaceEscapeNormalizer = false;
+          }
           operations.add(
             NormalizerOperation(
               type: 'Replace',
@@ -551,6 +571,7 @@ class HuggingFaceTokenizerLoader {
     return (
       addDummyPrefix: addDummyPrefix,
       escapeWhitespaces: escapeWhitespaces,
+      hasSpaceEscapeNormalizer: hasSpaceEscapeNormalizer,
       removeExtraWhitespaces: removeExtraWhitespaces,
       operations: hasPrecompiled ? List.unmodifiable(operations) : const [],
     );
@@ -579,7 +600,7 @@ class HuggingFaceTokenizerLoader {
 
   static PreTokenizerSpec? _parsePreTokenizer(
     Map<String, dynamic>? data, {
-    required bool escapeWhitespaces,
+    required bool hasSpaceEscapeNormalizer,
   }) {
     if (data == null) return null;
 
@@ -593,7 +614,10 @@ class HuggingFaceTokenizerLoader {
           useMetaspace: false,
         );
       case 'Split':
-        return _parseSplit(data, escapeWhitespaces: escapeWhitespaces);
+        return _parseSplit(
+          data,
+          hasSpaceEscapeNormalizer: hasSpaceEscapeNormalizer,
+        );
       case 'Sequence':
         final rawPreTokenizers = data['pretokenizers'];
         if (rawPreTokenizers is! List) {
@@ -625,7 +649,10 @@ class HuggingFaceTokenizerLoader {
             }
             metaspace = _parseMetaspace(raw);
           } else if (childType == 'Split') {
-            _parseSplit(raw, escapeWhitespaces: escapeWhitespaces);
+            _parseSplit(
+              raw,
+              hasSpaceEscapeNormalizer: hasSpaceEscapeNormalizer,
+            );
           } else {
             throw UnsupportedError(
               'Unsupported Hugging Face pre-tokenizer: $childType',
@@ -652,7 +679,7 @@ class HuggingFaceTokenizerLoader {
 
   static PreTokenizerSpec _parseSplit(
     Map<String, dynamic> data, {
-    required bool escapeWhitespaces,
+    required bool hasSpaceEscapeNormalizer,
   }) {
     final pattern = data['pattern'];
     final behavior = data['behavior'] as String?;
@@ -666,7 +693,7 @@ class HuggingFaceTokenizerLoader {
     // normalizer the delimiter survives and the split is real, so the
     // acceptance is conditioned on it rather than on the Split alone.
     final unreachablePattern =
-        escapeWhitespaces &&
+        hasSpaceEscapeNormalizer &&
         pattern is Map &&
         pattern.length == 1 &&
         pattern['String'] == ' ';
@@ -679,7 +706,7 @@ class HuggingFaceTokenizerLoader {
     throw UnsupportedError(
       'Unsupported Hugging Face pre-tokenizer: Split with '
       'pattern=${jsonEncode(pattern)}, behavior=$behavior, invert=$invert'
-      '${escapeWhitespaces ? '' : ' (normalizer keeps literal spaces)'}',
+      '${hasSpaceEscapeNormalizer ? '' : ' (normalizer keeps literal spaces)'}',
     );
   }
 

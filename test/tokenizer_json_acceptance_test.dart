@@ -13,7 +13,7 @@ const _emptyNormalizer = {'type': 'Sequence', 'normalizers': <dynamic>[]};
 
 Map<String, dynamic> _xlmTokenizerJson({
   required List<String> pieces,
-  required Map<String, dynamic> normalizer,
+  required Map<String, dynamic>? normalizer,
   Map<String, dynamic>? preTokenizer,
   Map<String, dynamic>? postProcessor,
   List<Map<String, dynamic>>? addedTokens,
@@ -249,6 +249,36 @@ void main() {
       final json = _xlmTokenizerJson(
         pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
         normalizer: _emptyNormalizer,
+        preTokenizer: gemmaSplit,
+      );
+
+      expect(
+        () => HuggingFaceTokenizerLoader.fromMap(json),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('rejects a Split when the normalizer is absent', () {
+      final json = _xlmTokenizerJson(
+        pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+        normalizer: null,
+        preTokenizer: gemmaSplit,
+      );
+
+      expect(
+        () => HuggingFaceTokenizerLoader.fromMap(json),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+
+    test('rejects a Split when another Replace emits the marker', () {
+      final json = _xlmTokenizerJson(
+        pieces: ['<s>', '<pad>', '</s>', '<unk>', 'a'],
+        normalizer: {
+          'type': 'Replace',
+          'pattern': {'String': 'x'},
+          'content': '\u2581',
+        },
         preTokenizer: gemmaSplit,
       );
 
