@@ -392,6 +392,7 @@ class HuggingFaceTokenizerLoader {
     final normalizer = _parseNormalizer(normalizerData);
     final preTokenizer = _parsePreTokenizer(
       data['pre_tokenizer'] as Map<String, dynamic>?,
+      escapeWhitespaces: normalizer.escapeWhitespaces,
     );
     var addDummyPrefix = normalizer.addDummyPrefix;
     var escapeWhitespaces = normalizer.escapeWhitespaces;
@@ -576,7 +577,10 @@ class HuggingFaceTokenizerLoader {
     );
   }
 
-  static PreTokenizerSpec? _parsePreTokenizer(Map<String, dynamic>? data) {
+  static PreTokenizerSpec? _parsePreTokenizer(
+    Map<String, dynamic>? data, {
+    required bool escapeWhitespaces,
+  }) {
     if (data == null) return null;
 
     final type = data['type'] as String?;
@@ -588,6 +592,8 @@ class HuggingFaceTokenizerLoader {
           whitespaceSplit: true,
           useMetaspace: false,
         );
+      case 'Split':
+        return _parseSplit(data, escapeWhitespaces: escapeWhitespaces);
       case 'Sequence':
         final rawPreTokenizers = data['pretokenizers'];
         if (rawPreTokenizers is! List) {
@@ -618,6 +624,8 @@ class HuggingFaceTokenizerLoader {
               );
             }
             metaspace = _parseMetaspace(raw);
+          } else if (childType == 'Split') {
+            _parseSplit(raw, escapeWhitespaces: escapeWhitespaces);
           } else {
             throw UnsupportedError(
               'Unsupported Hugging Face pre-tokenizer: $childType',
@@ -640,6 +648,39 @@ class HuggingFaceTokenizerLoader {
       default:
         throw UnsupportedError('Unsupported Hugging Face pre-tokenizer: $type');
     }
+  }
+
+  static PreTokenizerSpec _parseSplit(
+    Map<String, dynamic> data, {
+    required bool escapeWhitespaces,
+  }) {
+    final pattern = data['pattern'];
+    final behavior = data['behavior'] as String?;
+    final invert = data['invert'] as bool? ?? false;
+
+    // Gemma-family files (SigLIP 2's text tower among them) pair this Split
+    // with a Replace normalizer that turns every space into U+2581. Hugging
+    // Face normalizes before pre-tokenizing, so the delimiter is already gone
+    // and the Split matches nothing -- which is why 1.3.3, with no
+    // pre-tokenizer parsing at all, produced correct ids. Without that
+    // normalizer the delimiter survives and the split is real, so the
+    // acceptance is conditioned on it rather than on the Split alone.
+    final unreachablePattern =
+        escapeWhitespaces &&
+        pattern is Map &&
+        pattern.length == 1 &&
+        pattern['String'] == ' ';
+    if (unreachablePattern && !invert) {
+      return const PreTokenizerSpec(
+        whitespaceSplit: false,
+        useMetaspace: false,
+      );
+    }
+    throw UnsupportedError(
+      'Unsupported Hugging Face pre-tokenizer: Split with '
+      'pattern=${jsonEncode(pattern)}, behavior=$behavior, invert=$invert'
+      '${escapeWhitespaces ? '' : ' (normalizer keeps literal spaces)'}',
+    );
   }
 
   static PreTokenizerSpec _parseMetaspace(Map<String, dynamic> data) {

@@ -1323,8 +1323,13 @@ class SentencePieceTokenizer {
         }
       }
     } else {
+      // A pre-tokenizer that neither splits on whitespace nor applies metaspace
+      // still ran and produced one piece covering the whole input, so that
+      // piece is word 0. Hugging Face does the same (`word_idx.or(Some(idx))`
+      // in `PreTokenizedString::into_encoding`); only the `spec == null` case
+      // above, where the file declares no pre-tokenizer, leaves the id unset.
       chunks.add(
-        _PipelineChunk(text: normalized, alignment: source, wordId: null),
+        _PipelineChunk(text: normalized, alignment: source, wordId: 0),
       );
     }
     return chunks;

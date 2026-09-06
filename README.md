@@ -294,6 +294,7 @@ if (TokenizerJsonLoader.isHuggingFaceFormat(data)) {
 - Special token detection (unk, bos, eos, pad)
 - Direct and nested `Precompiled` normalizers with ordered `Replace` operations
 - `WhitespaceSplit` and `Metaspace` pre-tokenizers, including current and legacy configuration fields
+- `Split` pre-tokenizers whose delimiter the normalizer has already removed, as the Gemma family ships
 - `TemplateProcessing` BOS/EOS post-processing with declared special-token IDs
 - Tokenizer-level padding and truncation settings, preserving post-processor special tokens
 - Unigram consecutive unknown-token fusion (`fuse_unk`)
